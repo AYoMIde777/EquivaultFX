@@ -5,8 +5,8 @@ export default function TradingViewTicker() {
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
-    container.innerHTML = '';
+    if (!container || container.dataset.tvLoaded === 'true') return;
+    container.dataset.tvLoaded = 'true';
 
     const widgetDiv = document.createElement('div');
     widgetDiv.className = 'tradingview-widget-container__widget';
@@ -17,7 +17,7 @@ export default function TradingViewTicker() {
       'https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js';
     script.type = 'text/javascript';
     script.async = true;
-    script.innerHTML = JSON.stringify({
+    script.text = JSON.stringify({
       symbols: [
         { proName: 'FX:EURUSD', title: 'EUR/USD' },
         { proName: 'FX:GBPUSD', title: 'GBP/USD' },
@@ -35,6 +35,11 @@ export default function TradingViewTicker() {
     });
 
     container.appendChild(script);
+
+    return () => {
+      delete container.dataset.tvLoaded;
+      container.replaceChildren();
+    };
   }, []);
 
   return (

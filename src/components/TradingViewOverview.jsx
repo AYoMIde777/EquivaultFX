@@ -6,7 +6,10 @@ export default function TradingViewOverview({ height = 460 }) {
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    container.innerHTML = '';
+
+    delete container.dataset.tvLoaded;
+    container.replaceChildren();
+    container.dataset.tvLoaded = 'true';
 
     const widgetDiv = document.createElement('div');
     widgetDiv.className = 'tradingview-widget-container__widget';
@@ -17,7 +20,7 @@ export default function TradingViewOverview({ height = 460 }) {
       'https://s3.tradingview.com/external-embedding/embed-widget-market-overview.js';
     script.type = 'text/javascript';
     script.async = true;
-    script.innerHTML = JSON.stringify({
+    script.text = JSON.stringify({
       colorTheme: 'dark',
       dateRange: '1D',
       showChart: true,
@@ -77,6 +80,11 @@ export default function TradingViewOverview({ height = 460 }) {
     });
 
     container.appendChild(script);
+
+    return () => {
+      delete container.dataset.tvLoaded;
+      container.replaceChildren();
+    };
   }, [height]);
 
   return (

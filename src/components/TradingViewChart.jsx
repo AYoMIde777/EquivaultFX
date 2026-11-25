@@ -6,11 +6,14 @@ export default function TradingViewChart({ symbol = 'FX:EURUSD', height = 540 })
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    container.innerHTML = '';
+
+    delete container.dataset.tvLoaded;
+    container.replaceChildren();
+    container.dataset.tvLoaded = 'true';
 
     const widgetDiv = document.createElement('div');
     widgetDiv.className = 'tradingview-widget-container__widget';
-    widgetDiv.style.height = `${height}px`;
+    widgetDiv.style.height = '100%';
     widgetDiv.style.width = '100%';
     container.appendChild(widgetDiv);
 
@@ -19,7 +22,7 @@ export default function TradingViewChart({ symbol = 'FX:EURUSD', height = 540 })
       'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
     script.type = 'text/javascript';
     script.async = true;
-    script.innerHTML = JSON.stringify({
+    script.text = JSON.stringify({
       autosize: true,
       symbol: symbol,
       interval: '15',
@@ -37,6 +40,11 @@ export default function TradingViewChart({ symbol = 'FX:EURUSD', height = 540 })
     });
 
     container.appendChild(script);
+
+    return () => {
+      delete container.dataset.tvLoaded;
+      container.replaceChildren();
+    };
   }, [symbol, height]);
 
   return (
