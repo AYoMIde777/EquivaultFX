@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import efxLogo from '../assets/EFX logo.jpg';
 import { supabase } from '../lib/supabase';
 
 export default function AuthPage() {
@@ -73,7 +74,7 @@ export default function AuthPage() {
           <Link to="/" className="brand-mark">
             {!logoError ? (
               <img
-                src="/assets/logo.png"
+                src={efxLogo}
                 alt="EquivaultFX"
                 className="brand-logo-img"
                 onError={() => setLogoError(true)}

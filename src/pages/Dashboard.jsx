@@ -14,6 +14,7 @@ import {
   AlertCircle,
   ExternalLink,
 } from 'lucide-react';
+import efxLogo from '../assets/EFX logo.jpg';
 import { supabase } from '../lib/supabase';
 import TradingViewChart from '../components/TradingViewChart';
 import TradingViewTicker from '../components/TradingViewTicker';
@@ -33,16 +34,13 @@ export default function Dashboard({ session }) {
   const [logoError, setLogoError] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
 
-  // Database-backed state
   const [profile, setProfile] = useState(null);
   const [trades, setTrades] = useState([]);
   const [transactions, setTransactions] = useState([]);
 
-  // Admin state
   const [allProfiles, setAllProfiles] = useState([]);
   const [allTransactions, setAllTransactions] = useState([]);
 
-  // Forms
   const [selectedSymbol, setSelectedSymbol] = useState(SYMBOLS[0]);
   const [orderAmount, setOrderAmount] = useState(500);
   const [leverage, setLeverage] = useState('1:50');
@@ -120,7 +118,6 @@ export default function Dashboard({ session }) {
   const balance = Number(profile?.balance || 0);
   const kycStatus = profile?.kyc_status || 'unverified';
 
-  // Execute Trade
   const handlePlaceOrder = async (side) => {
     const amt = Number(orderAmount);
     if (!amt || amt <= 0 || amt > balance) {
@@ -161,7 +158,6 @@ export default function Dashboard({ session }) {
     setActiveTab('my-trades');
   };
 
-  // Close Trade
   const handleCloseTrade = async (trade) => {
     if (trade.status !== 'OPEN') return;
     const settlement = Number(trade.amount) + Number(trade.pnl);
@@ -183,7 +179,6 @@ export default function Dashboard({ session }) {
     await loadUserData();
   };
 
-  // Request Deposit (Pending Admin Confirmation)
   const handleDeposit = async (e) => {
     e.preventDefault();
     const amt = Number(depositAmt);
@@ -208,7 +203,6 @@ export default function Dashboard({ session }) {
     if (isAdmin) await loadAdminData();
   };
 
-  // Request Withdrawal
   const handleWithdraw = async (e) => {
     e.preventDefault();
     const amt = Number(withdrawAmt);
@@ -241,7 +235,6 @@ export default function Dashboard({ session }) {
     if (isAdmin) await loadAdminData();
   };
 
-  // Upload KYC Documents to Private Supabase Storage
   const handleKycSubmit = async (e) => {
     e.preventDefault();
     if (!idFile || !selfieFile) {
@@ -279,7 +272,6 @@ export default function Dashboard({ session }) {
     if (isAdmin) await loadAdminData();
   };
 
-  // Admin Actions
   const handleAdminKycAction = async (targetUserId, decision) => {
     await supabase
       .from('profiles')
@@ -311,7 +303,6 @@ export default function Dashboard({ session }) {
     const currentBal = Number(tx.profiles?.balance || 0);
     const txAmt = Number(tx.amount);
 
-    // If approving a deposit, add funds; if rejecting a withdrawal, refund funds
     if (decision === 'Completed' && txAmt > 0) {
       await supabase
         .from('profiles')
@@ -340,7 +331,7 @@ export default function Dashboard({ session }) {
           <Link to="/" className="brand-mark">
             {!logoError ? (
               <img
-                src="/assets/logo.png"
+                src={efxLogo}
                 alt="EquivaultFX"
                 className="brand-logo-img"
                 onError={() => setLogoError(true)}
@@ -478,7 +469,6 @@ export default function Dashboard({ session }) {
             </div>
           )}
 
-          {/* KPI Cards */}
           <div className="kpi-grid tabular">
             <div className="kpi-card">
               <div className="kpi-label">Available Balance</div>
@@ -512,7 +502,6 @@ export default function Dashboard({ session }) {
             </div>
           </div>
 
-          {/* OVERVIEW */}
           {activeTab === 'overview' && (
             <>
               <div className="panel-card">
@@ -578,7 +567,6 @@ export default function Dashboard({ session }) {
             </>
           )}
 
-          {/* LIVE TRADE */}
           {activeTab === 'trade' && (
             <div className="terminal-grid">
               <TradingViewChart symbol={selectedSymbol.value} height={540} />
@@ -662,7 +650,6 @@ export default function Dashboard({ session }) {
             </div>
           )}
 
-          {/* MY TRADES */}
           {activeTab === 'my-trades' && (
             <div className="panel-card">
               <div className="panel-header">
@@ -740,7 +727,6 @@ export default function Dashboard({ session }) {
             </div>
           )}
 
-          {/* WALLET */}
           {activeTab === 'wallet' && (
             <div className="two-col-grid">
               <div className="panel-card">
@@ -829,7 +815,6 @@ export default function Dashboard({ session }) {
             </div>
           )}
 
-          {/* KYC */}
           {activeTab === 'kyc' && (
             <div className="panel-card" style={{ maxWidth: '680px' }}>
               <div className="panel-header">
@@ -886,7 +871,6 @@ export default function Dashboard({ session }) {
             </div>
           )}
 
-          {/* SETTINGS */}
           {activeTab === 'settings' && (
             <div className="panel-card" style={{ maxWidth: '540px' }}>
               <h3 style={{ marginBottom: '14px' }}>Account Profile</h3>
@@ -925,7 +909,6 @@ export default function Dashboard({ session }) {
             </div>
           )}
 
-          {/* ADMIN COMPLIANCE DESK */}
           {activeTab === 'admin' && isAdmin && (
             <>
               <div className="panel-card">

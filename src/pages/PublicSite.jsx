@@ -9,6 +9,8 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
+import efxLogo from '../assets/EFX logo.jpg';
+import heroBg from '../assets/hero-bg.gif';
 import TradingViewTicker from '../components/TradingViewTicker';
 import TradingViewOverview from '../components/TradingViewOverview';
 
@@ -78,7 +80,7 @@ export default function PublicSite() {
           <Link to="/" className="brand-mark">
             {!logoError ? (
               <img
-                src="/assets/logo.png"
+                src={efxLogo}
                 alt="EquivaultFX"
                 className="brand-logo-img"
                 onError={() => setLogoError(true)}
@@ -113,7 +115,7 @@ export default function PublicSite() {
 
       <section className="hero-section">
         <img
-          src="/assets/hero-bg.gif"
+          src={heroBg}
           alt=""
           className="hero-gif-bg"
           onError={(e) => {
