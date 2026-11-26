@@ -426,3 +426,62 @@
     display: none;
   }
 }
+.auth-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.auth-alert {
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.auth-alert.error {
+  background: var(--accent-crimson-soft);
+  border: 1px solid var(--accent-crimson);
+}
+
+.auth-alert.success {
+  background: var(--positive-soft);
+  border: 1px solid var(--positive);
+}
+
+.password-meter {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.meter-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+
+.meter-bar.active {
+  background: var(--accent-crimson);
+}
+
+.password-checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.password-checklist span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+@media (max-width: 600px) {
+  .auth-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}

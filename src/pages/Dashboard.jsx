@@ -4,7 +4,8 @@ import {
   LayoutDashboard,
   CandlestickChart,
   History,
-  Wallet,
+  ArrowDownToLine,
+  ArrowUpFromLine,
   ShieldCheck,
   Settings,
   ShieldAlert,
@@ -13,6 +14,8 @@ import {
   Clock,
   AlertCircle,
   ExternalLink,
+  Menu,
+  X,
 } from 'lucide-react';
 import efxLogo from '../assets/EFX logo.jpg';
 import { supabase } from '../lib/supabase';
@@ -28,34 +31,68 @@ const SYMBOLS = [
   { label: 'S&P 500 Index', value: 'FOREXCOM:SPXUSD', refPrice: 5985.2 },
 ];
 
+const DEFAULT_NETWORKS = [
+  { id: 'TRC20', label: 'USDT (TRC20 — Tron)', gasFee: 1.5 },
+  { id: 'BEP20', label: 'USDT (BEP20 — BNB Smart Chain)', gasFee: 0.8 },
+  { id: 'ERC20', label: 'USDT (ERC20 — Ethereum)', gasFee: 12.0 },
+  { id: 'BTC', label: 'Bitcoin (BTC Network)', gasFee: 4.5 },
+];
+
+const DEFAULT_TRC20_WALLET = 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE';
+
 export default function Dashboard({ session }) {
   const navigate = useNavigate();
   const userId = session.user.id;
   const [logoError, setLogoError] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
 
   const [profile, setProfile] = useState(null);
   const [trades, setTrades] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [depositWallet, setDepositWallet] = useState(DEFAULT_TRC20_WALLET);
+  const [networks, setNetworks] = useState(DEFAULT_NETWORKS);
 
   const [allProfiles, setAllProfiles] = useState([]);
+  const [balanceEdits, setBalanceEdits] = useState({});
   const [allTransactions, setAllTransactions] = useState([]);
+  const [walletInput, setWalletInput] = useState(DEFAULT_TRC20_WALLET);
+  const [gasEdits, setGasEdits] = useState({
+    TRC20: '1.50',
+    BEP20: '0.80',
+    ERC20: '12.00',
+    BTC: '4.50',
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const [selectedSymbol, setSelectedSymbol] = useState(SYMBOLS[0]);
   const [orderAmount, setOrderAmount] = useState(500);
   const [leverage, setLeverage] = useState('1:50');
+
+  const [depositNetworkId, setDepositNetworkId] = useState('TRC20');
   const [depositAmt, setDepositAmt] = useState(1000);
+  const [depositTxHash, setDepositTxHash] = useState('');
+
+  const [withdrawNetworkId, setWithdrawNetworkId] = useState('TRC20');
   const [withdrawAmt, setWithdrawAmt] = useState(500);
   const [withdrawWallet, setWithdrawWallet] = useState('');
+  const [withdrawPinInput, setWithdrawPinInput] = useState('');
+
   const [docType, setDocType] = useState('International Passport');
   const [idFile, setIdFile] = useState(null);
   const [selfieFile, setSelfieFile] = useState(null);
   const [profileNameInput, setProfileNameInput] = useState('');
+  const [pinInput, setPinInput] = useState('');
   const [notice, setNotice] = useState('');
 
   const showNotice = (msg) => {
     setNotice(msg);
-    setTimeout(() => setNotice(''), 4000);
+    setTimeout(() => setNotice(''), 4500);
+  };
+
+  const selectTab = (tab) => {
+    setActiveTab(tab);
+    setMobileMenuOpen(false);
   };
 
   const isAdmin =
@@ -72,6 +109,7 @@ export default function Dashboard({ session }) {
     if (prof) {
       setProfile(prof);
       setProfileNameInput(prof.full_name || '');
+      setPinInput(prof.withdrawal_pin || '');
     }
 
     const { data: userTrades } = await supabase
@@ -89,6 +127,33 @@ export default function Dashboard({ session }) {
       .order('created_at', { ascending: false });
 
     if (userTxs) setTransactions(userTxs);
+
+    const { data: settingsRows } = await supabase
+      .from('site_settings')
+      .select('key, value');
+
+    if (settingsRows?.length) {
+      const map = Object.fromEntries(settingsRows.map((r) => [r.key, r.value]));
+      if (map.usdt_trc20_wallet) {
+        setDepositWallet(map.usdt_trc20_wallet);
+        setWalletInput(map.usdt_trc20_wallet);
+      }
+      setGasEdits({
+        TRC20: map.gas_fee_trc20 ?? '1.50',
+        BEP20: map.gas_fee_bep20 ?? '0.80',
+        ERC20: map.gas_fee_erc20 ?? '12.00',
+        BTC: map.gas_fee_btc ?? '4.50',
+      });
+      setNetworks(
+        DEFAULT_NETWORKS.map((net) => {
+          const overrideKey = `gas_fee_${net.id.toLowerCase()}`;
+          const parsed = Number(map[overrideKey]);
+          return Number.isFinite(parsed) && map[overrideKey] !== undefined
+            ? { ...net, gasFee: parsed }
+            : net;
+        })
+      );
+    }
   };
 
   const loadAdminData = async () => {
@@ -96,7 +161,18 @@ export default function Dashboard({ session }) {
       .from('profiles')
       .select('*')
       .order('created_at', { ascending: false });
-    if (profilesList) setAllProfiles(profilesList);
+    if (profilesList) {
+      setAllProfiles(profilesList);
+      setBalanceEdits((prev) => {
+        const next = { ...prev };
+        for (const p of profilesList) {
+          if (next[p.id] === undefined) {
+            next[p.id] = String(Number(p.balance || 0));
+          }
+        }
+        return next;
+      });
+    }
 
     const { data: txList } = await supabase
       .from('transactions')
@@ -117,6 +193,10 @@ export default function Dashboard({ session }) {
 
   const balance = Number(profile?.balance || 0);
   const kycStatus = profile?.kyc_status || 'unverified';
+  const depositNetwork =
+    networks.find((n) => n.id === depositNetworkId) || networks[0];
+  const withdrawNetwork =
+    networks.find((n) => n.id === withdrawNetworkId) || networks[0];
 
   const handlePlaceOrder = async (side) => {
     const amt = Number(orderAmount);
@@ -155,7 +235,7 @@ export default function Dashboard({ session }) {
 
     showNotice(`${side} order executed for $${amt.toLocaleString()}.`);
     await loadUserData();
-    setActiveTab('my-trades');
+    selectTab('my-trades');
   };
 
   const handleCloseTrade = async (trade) => {
@@ -173,9 +253,7 @@ export default function Dashboard({ session }) {
       .update({ status: 'CLOSED' })
       .eq('id', trade.id);
 
-    showNotice(
-      `Position closed. $${settlement.toFixed(2)} settled to your wallet.`
-    );
+    showNotice(`Position closed. $${settlement.toFixed(2)} settled to your wallet.`);
     await loadUserData();
   };
 
@@ -186,8 +264,11 @@ export default function Dashboard({ session }) {
 
     const { error } = await supabase.from('transactions').insert({
       user_id: userId,
-      type: 'Deposit (USDT TRC20)',
+      type: `Deposit (${depositNetwork.id})`,
       amount: amt,
+      gas_fee: depositNetwork.gasFee,
+      network: depositNetwork.id,
+      wallet_address: depositTxHash.trim() || depositWallet,
       status: 'Pending',
     });
 
@@ -196,8 +277,9 @@ export default function Dashboard({ session }) {
       return;
     }
 
+    setDepositTxHash('');
     showNotice(
-      `Deposit notice for $${amt.toLocaleString()} logged. Balance credits once confirmed.`
+      `Deposit notice for $${amt.toLocaleString()} (${depositNetwork.id}) submitted.`
     );
     await loadUserData();
     if (isAdmin) await loadAdminData();
@@ -206,33 +288,80 @@ export default function Dashboard({ session }) {
   const handleWithdraw = async (e) => {
     e.preventDefault();
     const amt = Number(withdrawAmt);
+    const gas = withdrawNetwork.gasFee;
+    const totalDebit = amt + gas;
+
     if (kycStatus !== 'verified') {
       showNotice('Complete KYC verification before requesting payouts.');
-      setActiveTab('kyc');
+      selectTab('kyc');
       return;
     }
-    if (!amt || amt <= 0 || amt > balance || !withdrawWallet.trim()) {
-      showNotice('Enter a valid amount and destination USDT wallet.');
+    if (!profile?.withdrawal_pin) {
+      showNotice('Set your 4-digit withdrawal PIN in Account & PIN first.');
+      selectTab('settings');
+      return;
+    }
+    if (withdrawPinInput.trim() !== profile.withdrawal_pin) {
+      showNotice('Invalid 4-digit withdrawal security PIN.');
+      return;
+    }
+    if (!amt || amt <= 0 || !withdrawWallet.trim()) {
+      showNotice('Enter a valid amount and destination wallet address.');
+      return;
+    }
+    if (totalDebit > balance) {
+      showNotice(
+        `Insufficient balance to cover $${amt.toFixed(2)} + $${gas.toFixed(2)} ${withdrawNetwork.id} gas fee.`
+      );
       return;
     }
 
     await supabase
       .from('profiles')
-      .update({ balance: balance - amt })
+      .update({ balance: balance - totalDebit })
       .eq('id', userId);
 
     await supabase.from('transactions').insert({
       user_id: userId,
-      type: 'Withdrawal (USDT TRC20)',
+      type: `Withdrawal (${withdrawNetwork.id})`,
       amount: -amt,
+      gas_fee: gas,
+      network: withdrawNetwork.id,
       wallet_address: withdrawWallet.trim(),
       status: 'Pending',
     });
 
     setWithdrawWallet('');
-    showNotice(`Withdrawal request for $${amt.toLocaleString()} submitted.`);
+    setWithdrawPinInput('');
+    showNotice(
+      `Withdrawal of $${amt.toLocaleString()} submitted ($${gas.toFixed(2)} ${withdrawNetwork.id} gas fee applied).`
+    );
     await loadUserData();
     if (isAdmin) await loadAdminData();
+  };
+
+  const handleSaveSettings = async () => {
+    const cleanPin = pinInput.trim();
+    if (cleanPin && !/^\d{4}$/.test(cleanPin)) {
+      showNotice('Withdrawal PIN must be exactly 4 digits (0-9).');
+      return;
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        full_name: profileNameInput.trim(),
+        withdrawal_pin: cleanPin || null,
+      })
+      .eq('id', userId);
+
+    if (error) {
+      showNotice(error.message);
+      return;
+    }
+
+    showNotice('Profile and withdrawal security PIN saved.');
+    await loadUserData();
   };
 
   const handleKycSubmit = async (e) => {
@@ -272,6 +401,59 @@ export default function Dashboard({ session }) {
     if (isAdmin) await loadAdminData();
   };
 
+  const handleSavePlatformSettings = async (e) => {
+    e.preventDefault();
+    if (!walletInput.trim()) {
+      showNotice('Deposit wallet address cannot be empty.');
+      return;
+    }
+
+    setSavingSettings(true);
+    const now = new Date().toISOString();
+    const rows = [
+      { key: 'usdt_trc20_wallet', value: walletInput.trim(), updated_at: now },
+      { key: 'gas_fee_trc20', value: String(Number(gasEdits.TRC20 || 0).toFixed(2)), updated_at: now },
+      { key: 'gas_fee_bep20', value: String(Number(gasEdits.BEP20 || 0).toFixed(2)), updated_at: now },
+      { key: 'gas_fee_erc20', value: String(Number(gasEdits.ERC20 || 0).toFixed(2)), updated_at: now },
+      { key: 'gas_fee_btc', value: String(Number(gasEdits.BTC || 0).toFixed(2)), updated_at: now },
+    ];
+
+    const { error } = await supabase
+      .from('site_settings')
+      .upsert(rows, { onConflict: 'key' });
+
+    setSavingSettings(false);
+    if (error) {
+      showNotice(error.message);
+      return;
+    }
+
+    showNotice('Custody wallet and network gas fees updated live.');
+    await loadUserData();
+  };
+
+  const handleAdminBalanceSave = async (targetUserId, emailLabel) => {
+    const nextVal = Number(balanceEdits[targetUserId]);
+    if (!Number.isFinite(nextVal) || nextVal < 0) {
+      showNotice('Enter a valid non-negative balance.');
+      return;
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ balance: nextVal })
+      .eq('id', targetUserId);
+
+    if (error) {
+      showNotice(error.message);
+      return;
+    }
+
+    showNotice(`Updated ${emailLabel || 'user'} balance to $${nextVal.toFixed(2)}.`);
+    await loadAdminData();
+    await loadUserData();
+  };
+
   const handleAdminKycAction = async (targetUserId, decision) => {
     await supabase
       .from('profiles')
@@ -302,6 +484,7 @@ export default function Dashboard({ session }) {
 
     const currentBal = Number(tx.profiles?.balance || 0);
     const txAmt = Number(tx.amount);
+    const gas = Number(tx.gas_fee || 0);
 
     if (decision === 'Completed' && txAmt > 0) {
       await supabase
@@ -311,7 +494,7 @@ export default function Dashboard({ session }) {
     } else if (decision === 'Rejected' && txAmt < 0) {
       await supabase
         .from('profiles')
-        .update({ balance: currentBal + Math.abs(txAmt) })
+        .update({ balance: currentBal + Math.abs(txAmt) + gas })
         .eq('id', tx.user_id);
     }
 
@@ -323,79 +506,94 @@ export default function Dashboard({ session }) {
   const openTrades = trades.filter((t) => t.status === 'OPEN');
   const activeCapital = openTrades.reduce((sum, t) => sum + Number(t.amount), 0);
   const totalPnl = trades.reduce((sum, t) => sum + Number(t.pnl), 0);
+  const netWithdrawTotal = Math.max(0, Number(withdrawAmt || 0) + withdrawNetwork.gasFee);
 
   return (
     <div className="dash-shell">
-      <aside className="dash-sidebar">
+      {mobileMenuOpen && (
+        <div
+          className="dash-backdrop"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      <aside className={`dash-sidebar ${mobileMenuOpen ? 'open' : ''}`}>
         <div>
-          <Link to="/" className="brand-mark">
-            {!logoError ? (
-              <img
-                src={efxLogo}
-                alt="EquivaultFX"
-                className="brand-logo-img"
-                onError={() => setLogoError(true)}
-              />
-            ) : (
-              <span className="brand-logo-fallback">EF</span>
-            )}
-            <span>
-              Equivault<span className="brand-accent">FX</span>
-            </span>
-          </Link>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Link to="/" className="brand-mark">
+              {!logoError ? (
+                <img
+                  src={efxLogo}
+                  alt="EquivaultFX"
+                  className="brand-logo-img"
+                  onError={() => setLogoError(true)}
+                />
+              ) : (
+                <span className="brand-logo-fallback">EF</span>
+              )}
+              <span>
+                Equivault<span className="brand-accent">FX</span>
+              </span>
+            </Link>
+
+            <button
+              type="button"
+              className="mobile-close-btn"
+              onClick={() => setMobileMenuOpen(false)}
+              aria-label="Close navigation"
+            >
+              <X size={20} />
+            </button>
+          </div>
 
           <nav className="dash-nav">
             <button
-              className={`dash-nav-btn ${
-                activeTab === 'overview' ? 'active' : ''
-              }`}
-              onClick={() => setActiveTab('overview')}
+              className={`dash-nav-btn ${activeTab === 'overview' ? 'active' : ''}`}
+              onClick={() => selectTab('overview')}
             >
-              <LayoutDashboard size={17} /> Overview
+              <LayoutDashboard size={17} /> Market Overview
             </button>
             <button
               className={`dash-nav-btn ${activeTab === 'trade' ? 'active' : ''}`}
-              onClick={() => setActiveTab('trade')}
+              onClick={() => selectTab('trade')}
             >
-              <CandlestickChart size={17} /> Live Trade
+              <CandlestickChart size={17} /> ECN Live Terminal
             </button>
             <button
-              className={`dash-nav-btn ${
-                activeTab === 'my-trades' ? 'active' : ''
-              }`}
-              onClick={() => setActiveTab('my-trades')}
+              className={`dash-nav-btn ${activeTab === 'my-trades' ? 'active' : ''}`}
+              onClick={() => selectTab('my-trades')}
             >
-              <History size={17} /> My Trades ({openTrades.length})
+              <History size={17} /> Positions ({openTrades.length})
             </button>
             <button
-              className={`dash-nav-btn ${
-                activeTab === 'wallet' ? 'active' : ''
-              }`}
-              onClick={() => setActiveTab('wallet')}
+              className={`dash-nav-btn ${activeTab === 'deposit' ? 'active' : ''}`}
+              onClick={() => selectTab('deposit')}
             >
-              <Wallet size={17} /> Deposit &amp; Withdraw
+              <ArrowDownToLine size={17} /> Deposit Funds
+            </button>
+            <button
+              className={`dash-nav-btn ${activeTab === 'withdraw' ? 'active' : ''}`}
+              onClick={() => selectTab('withdraw')}
+            >
+              <ArrowUpFromLine size={17} /> Withdraw Funds
             </button>
             <button
               className={`dash-nav-btn ${activeTab === 'kyc' ? 'active' : ''}`}
-              onClick={() => setActiveTab('kyc')}
+              onClick={() => selectTab('kyc')}
             >
               <ShieldCheck size={17} /> KYC Verification
             </button>
             <button
-              className={`dash-nav-btn ${
-                activeTab === 'settings' ? 'active' : ''
-              }`}
-              onClick={() => setActiveTab('settings')}
+              className={`dash-nav-btn ${activeTab === 'settings' ? 'active' : ''}`}
+              onClick={() => selectTab('settings')}
             >
-              <Settings size={17} /> Settings
+              <Settings size={17} /> Account &amp; PIN
             </button>
 
             {isAdmin && (
               <button
-                className={`dash-nav-btn ${
-                  activeTab === 'admin' ? 'active' : ''
-                }`}
-                onClick={() => setActiveTab('admin')}
+                className={`dash-nav-btn ${activeTab === 'admin' ? 'active' : ''}`}
+                onClick={() => selectTab('admin')}
               >
                 <ShieldAlert size={17} /> Admin Desk
               </button>
@@ -428,27 +626,43 @@ export default function Dashboard({ session }) {
         <TradingViewTicker />
 
         <div className="dash-topbar">
-          <div>
-            <strong style={{ fontSize: '16px' }}>
-              Welcome, {profile?.full_name || session.user.email}
-            </strong>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-              {session.user.email}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button
+              type="button"
+              className="hamburger-btn"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Open menu"
+            >
+              <Menu size={20} />
+            </button>
+            <div>
+              <strong style={{ fontSize: '15px' }}>
+                {profile?.full_name || session.user.email}
+              </strong>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                {profile?.account_currency || 'USD'} Account • {session.user.email}
+              </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '8px' }}>
             <button
               className="btn btn-outline btn-sm"
-              onClick={() => setActiveTab('wallet')}
+              onClick={() => selectTab('deposit')}
             >
-              Deposit Funds
+              Deposit
+            </button>
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => selectTab('withdraw')}
+            >
+              Withdraw
             </button>
             <button
               className="btn btn-crimson btn-sm"
-              onClick={() => setActiveTab('trade')}
+              onClick={() => selectTab('trade')}
             >
-              New Trade
+              Trade
             </button>
           </div>
         </div>
@@ -471,19 +685,19 @@ export default function Dashboard({ session }) {
 
           <div className="kpi-grid tabular">
             <div className="kpi-card">
-              <div className="kpi-label">Available Balance</div>
+              <div className="kpi-label">Available Equity</div>
               <div className="kpi-value">
                 ${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-label">Active Margin</div>
+              <div className="kpi-label">Allocated Margin</div>
               <div className="kpi-value">
                 ${activeCapital.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-label">Floating / Realized PnL</div>
+              <div className="kpi-label">Net Session PnL</div>
               <div
                 className="kpi-value"
                 style={{
@@ -495,7 +709,7 @@ export default function Dashboard({ session }) {
               </div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-label">Account Status</div>
+              <div className="kpi-label">Execution Tier</div>
               <div className="kpi-value">
                 {isAdmin ? 'Admin / ECN' : 'Prime ECN'}
               </div>
@@ -504,22 +718,51 @@ export default function Dashboard({ session }) {
 
           {activeTab === 'overview' && (
             <>
-              <div className="panel-card">
-                <div className="panel-header">
-                  <h3>Live Market Chart ({selectedSymbol.label})</h3>
-                  <button
-                    className="btn btn-crimson btn-sm"
-                    onClick={() => setActiveTab('trade')}
-                  >
-                    Open Execution Ticket
-                  </button>
+              <div className="terminal-grid" style={{ marginBottom: '20px' }}>
+                <div className="panel-card" style={{ marginBottom: 0 }}>
+                  <div className="panel-header">
+                    <h3>Live Market Feed ({selectedSymbol.label})</h3>
+                    <button
+                      className="btn btn-crimson btn-sm"
+                      onClick={() => selectTab('trade')}
+                    >
+                      Execute Order
+                    </button>
+                  </div>
+                  <TradingViewChart symbol={selectedSymbol.value} height={390} />
                 </div>
-                <TradingViewChart symbol={selectedSymbol.value} height={420} />
+
+                <div className="panel-card" style={{ marginBottom: 0 }}>
+                  <div className="panel-header">
+                    <h3>Watchlist &amp; Quick Switch</h3>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {SYMBOLS.map((sym) => (
+                      <button
+                        key={sym.value}
+                        type="button"
+                        onClick={() => setSelectedSymbol(sym)}
+                        className="dash-nav-btn"
+                        style={{
+                          justifyContent: 'space-between',
+                          background:
+                            selectedSymbol.value === sym.value
+                              ? 'rgba(225, 29, 72, 0.16)'
+                              : 'var(--bg-input)',
+                          border: '1px solid var(--border-subtle)',
+                        }}
+                      >
+                        <span>{sym.label}</span>
+                        <strong className="tabular">${sym.refPrice.toLocaleString()}</strong>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="panel-card">
                 <div className="panel-header">
-                  <h3>Wallet Ledger</h3>
+                  <h3>Wallet &amp; Gas Fee Ledger</h3>
                 </div>
                 <div className="data-table-wrap">
                   <table className="data-table tabular">
@@ -527,6 +770,7 @@ export default function Dashboard({ session }) {
                       <tr>
                         <th>Type</th>
                         <th>Amount</th>
+                        <th>Gas Fee</th>
                         <th>Status</th>
                         <th>Date</th>
                       </tr>
@@ -534,8 +778,8 @@ export default function Dashboard({ session }) {
                     <tbody>
                       {transactions.length === 0 ? (
                         <tr>
-                          <td colSpan="4" style={{ color: 'var(--text-muted)' }}>
-                            No wallet transactions yet. Deposit funds to begin.
+                          <td colSpan="5" style={{ color: 'var(--text-muted)' }}>
+                            No wallet transactions yet.
                           </td>
                         </tr>
                       ) : (
@@ -553,10 +797,9 @@ export default function Dashboard({ session }) {
                               {Number(tx.amount) >= 0 ? '+' : ''}$
                               {Math.abs(Number(tx.amount)).toLocaleString()}
                             </td>
+                            <td>${Number(tx.gas_fee || 0).toFixed(2)}</td>
                             <td>{tx.status}</td>
-                            <td>
-                              {new Date(tx.created_at).toLocaleDateString()}
-                            </td>
+                            <td>{new Date(tx.created_at).toLocaleDateString()}</td>
                           </tr>
                         ))
                       )}
@@ -572,7 +815,7 @@ export default function Dashboard({ session }) {
               <TradingViewChart symbol={selectedSymbol.value} height={540} />
 
               <div className="order-ticket">
-                <h3 style={{ marginBottom: '14px' }}>Order Execution</h3>
+                <h3 style={{ marginBottom: '14px' }}>ECN Order Ticket</h3>
 
                 <div className="form-group">
                   <label className="form-label">Select Market / Pair</label>
@@ -580,9 +823,7 @@ export default function Dashboard({ session }) {
                     className="form-control"
                     value={selectedSymbol.value}
                     onChange={(e) => {
-                      const found = SYMBOLS.find(
-                        (s) => s.value === e.target.value
-                      );
+                      const found = SYMBOLS.find((s) => s.value === e.target.value);
                       if (found) setSelectedSymbol(found);
                     }}
                   >
@@ -653,16 +894,16 @@ export default function Dashboard({ session }) {
           {activeTab === 'my-trades' && (
             <div className="panel-card">
               <div className="panel-header">
-                <h3>Positions &amp; Trade History</h3>
+                <h3>Open Positions &amp; History</h3>
               </div>
               <div className="data-table-wrap">
                 <table className="data-table tabular">
                   <thead>
                     <tr>
                       <th>Instrument</th>
-                      <th>Direction</th>
+                      <th>Side</th>
                       <th>Margin</th>
-                      <th>Entry Price</th>
+                      <th>Entry</th>
                       <th>PnL</th>
                       <th>Status</th>
                       <th>Action</th>
@@ -678,9 +919,7 @@ export default function Dashboard({ session }) {
                     ) : (
                       trades.map((tr) => (
                         <tr key={tr.id}>
-                          <td>
-                            <strong>{tr.pair}</strong>
-                          </td>
+                          <td><strong>{tr.pair}</strong></td>
                           <td>
                             <span
                               className={`badge ${
@@ -700,8 +939,7 @@ export default function Dashboard({ session }) {
                                   : 'var(--negative)',
                             }}
                           >
-                            {Number(tr.pnl) >= 0 ? '+' : ''}$
-                            {Number(tr.pnl).toFixed(2)}
+                            {Number(tr.pnl) >= 0 ? '+' : ''}${Number(tr.pnl).toFixed(2)}
                           </td>
                           <td>{tr.status}</td>
                           <td>
@@ -713,9 +951,7 @@ export default function Dashboard({ session }) {
                                 Close Position
                               </button>
                             ) : (
-                              <span style={{ color: 'var(--text-muted)' }}>
-                                Settled
-                              </span>
+                              <span style={{ color: 'var(--text-muted)' }}>Settled</span>
                             )}
                           </td>
                         </tr>
@@ -727,91 +963,175 @@ export default function Dashboard({ session }) {
             </div>
           )}
 
-          {activeTab === 'wallet' && (
-            <div className="two-col-grid">
-              <div className="panel-card">
-                <h3 style={{ marginBottom: '12px' }}>Crypto Deposit (USDT)</h3>
-                <p
-                  style={{
-                    fontSize: '13px',
-                    color: 'var(--text-secondary)',
-                    marginBottom: '16px',
-                  }}
-                >
-                  Transfer USDT (TRC20) to your custody wallet below, then
-                  submit the deposit notice for confirmation.
-                </p>
+          {activeTab === 'deposit' && (
+            <div className="panel-card" style={{ maxWidth: '640px' }}>
+              <div className="panel-header">
+                <h3>Fund Trading Wallet (Deposit)</h3>
+                <span className="plan-badge" style={{ marginBottom: 0 }}>
+                  Est. Gas: ${depositNetwork.gasFee.toFixed(2)}
+                </span>
+              </div>
 
-                <div
-                  style={{
-                    background: 'var(--bg-input)',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    border: '1px solid var(--border-subtle)',
-                    marginBottom: '16px',
-                    wordBreak: 'break-all',
-                  }}
+              <div className="form-group">
+                <label className="form-label">Select Blockchain Network</label>
+                <select
+                  className="form-control"
+                  value={depositNetwork.id}
+                  onChange={(e) => setDepositNetworkId(e.target.value)}
                 >
-                  TRC20 Address:{' '}
-                  <strong>TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE</strong>
+                  {networks.map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.label} — Network Gas: ${n.gasFee.toFixed(2)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div
+                style={{
+                  background: 'var(--bg-input)',
+                  padding: '14px',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  border: '1px solid var(--border-subtle)',
+                  marginBottom: '16px',
+                  wordBreak: 'break-all',
+                }}
+              >
+                <div style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                  Official EquivaultFX Custody Address ({depositNetwork.id}):
+                </div>
+                <strong>{depositWallet}</strong>
+              </div>
+
+              <form onSubmit={handleDeposit}>
+                <div className="form-group">
+                  <label className="form-label">Deposit Amount (USD)</label>
+                  <input
+                    type="number"
+                    className="form-control tabular"
+                    min="50"
+                    value={depositAmt}
+                    onChange={(e) => setDepositAmt(e.target.value)}
+                    required
+                  />
                 </div>
 
-                <form onSubmit={handleDeposit}>
-                  <div className="form-group">
-                    <label className="form-label">Deposit Amount (USD)</label>
-                    <input
-                      type="number"
-                      className="form-control tabular"
-                      value={depositAmt}
-                      onChange={(e) => setDepositAmt(e.target.value)}
-                    />
+                <div className="form-group">
+                  <label className="form-label">Transaction Hash / TXID (Optional)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Paste blockchain TXID for faster credit..."
+                    value={depositTxHash}
+                    onChange={(e) => setDepositTxHash(e.target.value)}
+                  />
+                </div>
+
+                <div className="gas-summary-box tabular">
+                  <div>
+                    <span>Credit Amount:</span>
+                    <strong>${Number(depositAmt || 0).toFixed(2)}</strong>
                   </div>
-                  <button type="submit" className="btn btn-crimson">
-                    Submit Deposit Notice
-                  </button>
-                </form>
+                  <div>
+                    <span>Sender Network Gas ({depositNetwork.id}):</span>
+                    <span>~${depositNetwork.gasFee.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <button type="submit" className="btn btn-crimson" style={{ width: '100%' }}>
+                  Confirm &amp; Log Deposit Notice
+                </button>
+              </form>
+            </div>
+          )}
+
+          {activeTab === 'withdraw' && (
+            <div className="panel-card" style={{ maxWidth: '640px' }}>
+              <div className="panel-header">
+                <h3>Outbound Crypto Withdrawal</h3>
+                <span className={`kyc-pill ${kycStatus}`} style={{ marginBottom: 0 }}>
+                  KYC: {kycStatus.toUpperCase()}
+                </span>
               </div>
 
-              <div className="panel-card">
-                <h3 style={{ marginBottom: '12px' }}>Request Withdrawal</h3>
-                <p
-                  style={{
-                    fontSize: '13px',
-                    color: 'var(--text-secondary)',
-                    marginBottom: '16px',
-                  }}
-                >
-                  Outbound crypto withdrawals require Verified KYC status.
-                </p>
+              <form onSubmit={handleWithdraw}>
+                <div className="form-group">
+                  <label className="form-label">Payout Network</label>
+                  <select
+                    className="form-control"
+                    value={withdrawNetwork.id}
+                    onChange={(e) => setWithdrawNetworkId(e.target.value)}
+                  >
+                    {networks.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {n.label} — Gas Fee: ${n.gasFee.toFixed(2)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-                <form onSubmit={handleWithdraw}>
-                  <div className="form-group">
-                    <label className="form-label">Amount (USD)</label>
-                    <input
-                      type="number"
-                      className="form-control tabular"
-                      value={withdrawAmt}
-                      onChange={(e) => setWithdrawAmt(e.target.value)}
-                    />
+                <div className="form-group">
+                  <label className="form-label">Withdrawal Amount (USD)</label>
+                  <input
+                    type="number"
+                    className="form-control tabular"
+                    min="20"
+                    value={withdrawAmt}
+                    onChange={(e) => setWithdrawAmt(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">
+                    Destination {withdrawNetwork.id} Wallet Address
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Enter your external wallet address"
+                    value={withdrawWallet}
+                    onChange={(e) => setWithdrawWallet(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">4-Digit Withdrawal Security PIN</label>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={4}
+                    className="form-control tabular"
+                    placeholder="••••"
+                    value={withdrawPinInput}
+                    onChange={(e) =>
+                      setWithdrawPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="gas-summary-box tabular">
+                  <div>
+                    <span>Net Payout Sent to Wallet:</span>
+                    <strong>${Number(withdrawAmt || 0).toFixed(2)}</strong>
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">
-                      Destination USDT (TRC20) Wallet
-                    </label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="T..."
-                      value={withdrawWallet}
-                      onChange={(e) => setWithdrawWallet(e.target.value)}
-                    />
+                  <div>
+                    <span>Blockchain Gas Fee ({withdrawNetwork.id}):</span>
+                    <span style={{ color: '#fda4af' }}>+${withdrawNetwork.gasFee.toFixed(2)}</span>
                   </div>
-                  <button type="submit" className="btn btn-white">
-                    Submit Withdrawal Request
-                  </button>
-                </form>
-              </div>
+                  <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '8px' }}>
+                    <span>Total Deducted from Balance:</span>
+                    <strong>${netWithdrawTotal.toFixed(2)}</strong>
+                  </div>
+                </div>
+
+                <button type="submit" className="btn btn-white" style={{ width: '100%' }}>
+                  Verify PIN &amp; Submit Withdrawal
+                </button>
+              </form>
             </div>
           )}
 
@@ -819,9 +1139,7 @@ export default function Dashboard({ session }) {
             <div className="panel-card" style={{ maxWidth: '680px' }}>
               <div className="panel-header">
                 <h3>Identity Verification (KYC)</h3>
-                <span className={`kyc-pill ${kycStatus}`}>
-                  {kycStatus.toUpperCase()}
-                </span>
+                <span className={`kyc-pill ${kycStatus}`}>{kycStatus.toUpperCase()}</span>
               </div>
 
               <form onSubmit={handleKycSubmit}>
@@ -860,11 +1178,7 @@ export default function Dashboard({ session }) {
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  className="btn btn-crimson"
-                  style={{ marginTop: '12px' }}
-                >
+                <button type="submit" className="btn btn-crimson" style={{ marginTop: '12px' }}>
                   Upload Encrypted KYC Files
                 </button>
               </form>
@@ -873,7 +1187,7 @@ export default function Dashboard({ session }) {
 
           {activeTab === 'settings' && (
             <div className="panel-card" style={{ maxWidth: '540px' }}>
-              <h3 style={{ marginBottom: '14px' }}>Account Profile</h3>
+              <h3 style={{ marginBottom: '14px' }}>Account Profile &amp; Withdrawal PIN</h3>
               <div className="form-group">
                 <label className="form-label">Full Name</label>
                 <input
@@ -892,19 +1206,26 @@ export default function Dashboard({ session }) {
                   disabled
                 />
               </div>
+              <div className="form-group">
+                <label className="form-label">4-Digit Withdrawal Security PIN</label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  className="form-control tabular"
+                  placeholder="Enter 4 digits (e.g. 4829)"
+                  value={pinInput}
+                  onChange={(e) =>
+                    setPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))
+                  }
+                />
+              </div>
               <button
                 type="button"
                 className="btn btn-crimson"
-                onClick={async () => {
-                  await supabase
-                    .from('profiles')
-                    .update({ full_name: profileNameInput })
-                    .eq('id', userId);
-                  showNotice('Profile updated.');
-                  await loadUserData();
-                }}
+                onClick={handleSaveSettings}
               >
-                Save Changes
+                Save Profile &amp; PIN
               </button>
             </div>
           )}
@@ -913,11 +1234,53 @@ export default function Dashboard({ session }) {
             <>
               <div className="panel-card">
                 <div className="panel-header">
-                  <h3>Admin Desk: Client KYC &amp; Balances</h3>
-                  <button
-                    className="btn btn-outline btn-sm"
-                    onClick={loadAdminData}
-                  >
+                  <h3>Admin Desk: Custody Wallet &amp; Gas Fees</h3>
+                </div>
+
+                <form onSubmit={handleSavePlatformSettings}>
+                  <div className="form-group">
+                    <label className="form-label">Official Deposit Custody Wallet Address</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={walletInput}
+                      onChange={(e) => setWalletInput(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="kpi-grid tabular" style={{ marginBottom: '16px' }}>
+                    {['TRC20', 'BEP20', 'ERC20', 'BTC'].map((netId) => (
+                      <div key={netId} className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">{netId} Gas Fee (USD)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          className="form-control tabular"
+                          value={gasEdits[netId]}
+                          onChange={(e) =>
+                            setGasEdits((prev) => ({
+                              ...prev,
+                              [netId]: e.target.value,
+                            }))
+                          }
+                          required
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  <button type="submit" disabled={savingSettings} className="btn btn-crimson">
+                    {savingSettings ? 'Saving Settings...' : 'Save Wallet & Gas Fees'}
+                  </button>
+                </form>
+              </div>
+
+              <div className="panel-card">
+                <div className="panel-header">
+                  <h3>Admin Desk: Client Balances, KYC &amp; Controls</h3>
+                  <button className="btn btn-outline btn-sm" onClick={loadAdminData}>
                     Refresh
                   </button>
                 </div>
@@ -927,7 +1290,7 @@ export default function Dashboard({ session }) {
                     <thead>
                       <tr>
                         <th>Client</th>
-                        <th>Balance</th>
+                        <th>Edit Balance (USD)</th>
                         <th>KYC Status</th>
                         <th>Documents</th>
                         <th>Decision</th>
@@ -937,17 +1300,36 @@ export default function Dashboard({ session }) {
                       {allProfiles.map((p) => (
                         <tr key={p.id}>
                           <td>
-                            <strong>{p.full_name}</strong>
-                            <div
-                              style={{
-                                fontSize: '12px',
-                                color: 'var(--text-secondary)',
-                              }}
-                            >
+                            <strong>{p.full_name || 'Trader'}</strong>
+                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                               {p.email}
                             </div>
                           </td>
-                          <td>${Number(p.balance || 0).toLocaleString()}</td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                className="form-control tabular"
+                                style={{ width: '115px', marginTop: 0, padding: '6px 8px' }}
+                                value={balanceEdits[p.id] ?? String(Number(p.balance || 0))}
+                                onChange={(e) =>
+                                  setBalanceEdits((prev) => ({
+                                    ...prev,
+                                    [p.id]: e.target.value,
+                                  }))
+                                }
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-outline btn-sm"
+                                onClick={() => handleAdminBalanceSave(p.id, p.email)}
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </td>
                           <td>
                             <span className={`kyc-pill ${p.kyc_status}`}>
                               {p.kyc_status.toUpperCase()}
@@ -964,34 +1346,26 @@ export default function Dashboard({ session }) {
                                 </button>
                                 <button
                                   className="btn btn-outline btn-sm"
-                                  onClick={() =>
-                                    handleOpenKycDoc(p.kyc_selfie_path)
-                                  }
+                                  onClick={() => handleOpenKycDoc(p.kyc_selfie_path)}
                                 >
                                   Selfie <ExternalLink size={12} />
                                 </button>
                               </div>
                             ) : (
-                              <span style={{ color: 'var(--text-muted)' }}>
-                                None
-                              </span>
+                              <span style={{ color: 'var(--text-muted)' }}>None</span>
                             )}
                           </td>
                           <td>
                             <div style={{ display: 'flex', gap: '8px' }}>
                               <button
                                 className="btn btn-white btn-sm"
-                                onClick={() =>
-                                  handleAdminKycAction(p.id, 'verified')
-                                }
+                                onClick={() => handleAdminKycAction(p.id, 'verified')}
                               >
                                 Approve
                               </button>
                               <button
                                 className="btn btn-crimson btn-sm"
-                                onClick={() =>
-                                  handleAdminKycAction(p.id, 'unverified')
-                                }
+                                onClick={() => handleAdminKycAction(p.id, 'unverified')}
                               >
                                 Reject
                               </button>
@@ -1016,7 +1390,8 @@ export default function Dashboard({ session }) {
                         <th>Client</th>
                         <th>Type</th>
                         <th>Amount</th>
-                        <th>Wallet Address</th>
+                        <th>Gas Fee</th>
+                        <th>Wallet / TXID</th>
                         <th>Status</th>
                         <th>Action</th>
                       </tr>
@@ -1030,34 +1405,27 @@ export default function Dashboard({ session }) {
                             {Number(tx.amount) >= 0 ? '+' : ''}$
                             {Math.abs(Number(tx.amount)).toLocaleString()}
                           </td>
-                          <td style={{ fontSize: '12px' }}>
-                            {tx.wallet_address || '—'}
-                          </td>
+                          <td>${Number(tx.gas_fee || 0).toFixed(2)}</td>
+                          <td style={{ fontSize: '12px' }}>{tx.wallet_address || '—'}</td>
                           <td>{tx.status}</td>
                           <td>
                             {tx.status === 'Pending' ? (
                               <div style={{ display: 'flex', gap: '8px' }}>
                                 <button
                                   className="btn btn-white btn-sm"
-                                  onClick={() =>
-                                    handleAdminTxAction(tx, 'Completed')
-                                  }
+                                  onClick={() => handleAdminTxAction(tx, 'Completed')}
                                 >
                                   Approve
                                 </button>
                                 <button
                                   className="btn btn-crimson btn-sm"
-                                  onClick={() =>
-                                    handleAdminTxAction(tx, 'Rejected')
-                                  }
+                                  onClick={() => handleAdminTxAction(tx, 'Rejected')}
                                 >
                                   Reject
                                 </button>
                               </div>
                             ) : (
-                              <span style={{ color: 'var(--text-muted)' }}>
-                                Processed
-                              </span>
+                              <span style={{ color: 'var(--text-muted)' }}>Processed</span>
                             )}
                           </td>
                         </tr>

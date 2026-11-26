@@ -9,8 +9,8 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
-import efxLogo from '../assets/EFX logo.jpg';
 import heroBg from '../assets/hero-bg.gif';
+import BrandLogo from '../components/BrandLogo';
 import TradingViewTicker from '../components/TradingViewTicker';
 import TradingViewOverview from '../components/TradingViewOverview';
 
@@ -47,23 +47,62 @@ const PLANS = [
   },
 ];
 
+const TESTIMONIALS = [
+  {
+    name: 'Daniel Okafor',
+    role: 'FX & Gold Swing Trader • Lagos',
+    quote:
+      'Execution on XAU/USD during New York session opens is remarkably tight, and my USDT TRC20 withdrawals clear within 25 minutes.',
+    metric: '+18.4% Avg Monthly ROI',
+  },
+  {
+    name: 'Elena Rostova',
+    role: 'Quantitative Crypto Allocator • London',
+    quote:
+      'Having live multi-asset feeds, clear network gas fee breakdowns, and segregated cold custody in one dark terminal saves me switching across three platforms.',
+    metric: '$42,000 Managed Tier',
+  },
+  {
+    name: 'Marcus Vance',
+    role: 'Indices & Commodities Trader • Dubai',
+    quote:
+      'The Prime ECN liquidity plan and instant position settlement make portfolio tracking effortless even on mobile.',
+    metric: '0.0 Pip Raw Spread',
+  },
+];
+
 const FAQS = [
   {
     q: 'How fast are crypto deposits and withdrawals processed on EquivaultFX?',
-    a: 'USDT (TRC20/ERC20), BTC, and ETH deposits credit automatically upon network confirmation. Approved withdrawal requests are dispatched to your whitelisted wallet address within 15 to 60 minutes.',
+    a: 'USDT (TRC20/ERC20/BEP20), BTC, and ETH deposits credit automatically upon network confirmation. Approved withdrawal requests are dispatched to your whitelisted wallet address within 15 to 60 minutes.',
+  },
+  {
+    q: 'How are blockchain network gas fees handled on deposits and withdrawals?',
+    a: 'EquivaultFX displays the exact network gas fee upfront before you confirm a transaction (such as $1.50 for TRC20, $0.80 for BEP20, $4.50 for BTC, and $12.00 for ERC20) with transparent ledger tracking.',
+  },
+  {
+    q: 'How is EquivaultFX different from standard retail trading platforms?',
+    a: 'EquivaultFX pairs institutional multi-asset market feeds and managed liquidity tiers with dedicated separate deposit and withdrawal flows, 4-digit withdrawal PIN protection, and cold-storage reserve custody.',
   },
   {
     q: 'Is KYC verification required before trading or withdrawing?',
-    a: 'You can explore live charts and fund your account immediately after registration. Completing our 3-step KYC identity check unlocks full daily withdrawal limits and institutional liquidity tiers.',
+    a: 'You can explore live charts and fund your account immediately after registration. Completing our 3-step KYC identity verification unlocks full daily withdrawal limits and institutional liquidity tiers.',
   },
   {
     q: 'Which markets can I monitor and trade?',
     a: 'EquivaultFX provides live institutional feeds across major and minor Forex pairs, Cryptocurrencies, Global Stock Indices, and Spot Metals & Energy Commodities.',
   },
+  {
+    q: 'Does the trading dashboard work smoothly on mobile devices?',
+    a: 'Yes. On mobile screens, the dashboard sidebar collapses into a clean slide-out drawer opened via the top hamburger button, keeping charts, order tickets, and wallet actions easy to reach.',
+  },
+  {
+    q: 'How is my account and withdrawal activity secured?',
+    a: 'Accounts use password strength validation, encrypted sessions, a 4-digit withdrawal security PIN, role-isolated database access, and an encrypted KYC document vault.',
+  },
 ];
 
 export default function PublicSite() {
-  const [logoError, setLogoError] = useState(false);
   const [calcAmount, setCalcAmount] = useState(2500);
   const [calcPlanIdx, setCalcPlanIdx] = useState(1);
   const [openFaq, setOpenFaq] = useState(0);
@@ -77,26 +116,15 @@ export default function PublicSite() {
     <div className="public-wrapper">
       <header className="navbar">
         <div className="navbar-inner">
-          <Link to="/" className="brand-mark">
-            {!logoError ? (
-              <img
-                src={efxLogo}
-                alt="EquivaultFX"
-                className="brand-logo-img"
-                onError={() => setLogoError(true)}
-              />
-            ) : (
-              <span className="brand-logo-fallback">EF</span>
-            )}
-            <span>
-              Equivault<span className="brand-accent">FX</span>
-            </span>
+          <Link to="/" className="brand-mark-link">
+            <BrandLogo />
           </Link>
 
           <nav className="nav-links">
             <a href="#markets">Live Markets</a>
             <a href="#plans">Liquidity Plans</a>
             <a href="#security">Security</a>
+            <a href="#testimonials">Testimonials</a>
             <a href="#faq">FAQ</a>
           </nav>
 
@@ -116,11 +144,8 @@ export default function PublicSite() {
       <section className="hero-section">
         <img
           src={heroBg}
-          alt=""
+          alt="EquivaultFX market backdrop"
           className="hero-gif-bg"
-          onError={(e) => {
-            e.currentTarget.style.display = 'none';
-          }}
         />
         <div className="hero-overlay" />
 
@@ -343,7 +368,7 @@ export default function PublicSite() {
             </div>
             <h4 style={{ marginBottom: '8px' }}>Mandatory 2FA &amp; PIN</h4>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              Hardware/authenticator 2FA and withdrawal address whitelisting
+              4-digit withdrawal security PIN verification and address checks
               protect every outbound transfer.
             </p>
           </div>
@@ -369,6 +394,53 @@ export default function PublicSite() {
               liquidity bridges without dealing-desk delays.
             </p>
           </div>
+        </div>
+      </section>
+
+      <section id="testimonials" className="section-block">
+        <div className="section-header">
+          <div>
+            <div className="section-kicker">Verified Traders</div>
+            <h2 className="section-title">Client Execution Reports</h2>
+          </div>
+        </div>
+
+        <div className="plans-grid">
+          {TESTIMONIALS.map((item) => (
+            <div key={item.name} className="plan-card">
+              <div>
+                <span className="plan-badge">{item.metric}</span>
+                <p
+                  style={{
+                    fontSize: '14px',
+                    color: 'var(--text-primary)',
+                    margin: '12px 0 18px',
+                  }}
+                >
+                  &ldquo;{item.quote}&rdquo;
+                </p>
+              </div>
+              <div
+                style={{
+                  borderTop: '1px solid var(--border-subtle)',
+                  paddingTop: '12px',
+                }}
+              >
+                <strong
+                  style={{
+                    display: 'block',
+                    fontSize: '14px',
+                    color: 'var(--surface-white)',
+                  }}
+                >
+                  {item.name}
+                </strong>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  {item.role}
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 

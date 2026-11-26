@@ -1,39 +1,85 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Eye, EyeOff, Check, X } from 'lucide-react';
 import efxLogo from '../assets/EFX logo.jpg';
 import { supabase } from '../lib/supabase';
 
+const COUNTRIES = [
+  'Nigeria',
+  'United Kingdom',
+  'United States',
+  'United Arab Emirates',
+  'South Africa',
+  'Canada',
+  'Germany',
+  'Singapore',
+];
+
 export default function AuthPage() {
   const [searchParams] = useSearchParams();
-  const initialMode =
-    searchParams.get('mode') === 'signup' ? 'signup' : 'login';
+  const initialMode = searchParams.get('mode') === 'signup' ? 'signup' : 'login';
   const [mode, setMode] = useState(initialMode);
+
   const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
+  const [country, setCountry] = useState('Nigeria');
+  const [phone, setPhone] = useState('');
+  const [accountCurrency, setAccountCurrency] = useState('USD');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [agreedTerms, setAgreedTerms] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
   const [logoError, setLogoError] = useState(false);
   const navigate = useNavigate();
 
+  const checks = {
+    length: password.length >= 8,
+    upper: /[A-Z]/.test(password),
+    number: /[0-9]/.test(password),
+    special: /[^A-Za-z0-9]/.test(password),
+  };
+  const strengthScore = Object.values(checks).filter(Boolean).length;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setErrorMsg('');
     setInfoMsg('');
 
     if (mode === 'signup') {
+      if (strengthScore < 3) {
+        setErrorMsg('Use at least 8 characters including uppercase, number, and symbol.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setErrorMsg('Passwords do not match.');
+        return;
+      }
+      if (!agreedTerms) {
+        setErrorMsg('Please accept the Risk Disclosure and Client Agreement.');
+        return;
+      }
+
+      setLoading(true);
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: email.trim(),
         password,
         options: {
-          data: { full_name: fullName.trim() },
+          data: {
+            full_name: fullName.trim(),
+            username: username.trim().toLowerCase(),
+            country,
+            phone: phone.trim(),
+            account_currency: accountCurrency,
+          },
         },
       });
-
       setLoading(false);
+
       if (error) {
         setErrorMsg(error.message);
         return;
@@ -41,18 +87,17 @@ export default function AuthPage() {
       if (data.session) {
         navigate('/dashboard');
       } else {
-        setInfoMsg(
-          'Account created. Check your email to confirm your address, then log in.'
-        );
+        setInfoMsg('Account registered. Verify your email link, then sign in.');
         setMode('login');
       }
     } else {
+      setLoading(true);
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
-
       setLoading(false);
+
       if (error) {
         setErrorMsg(error.message);
         return;
@@ -63,14 +108,8 @@ export default function AuthPage() {
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
+      <div className="auth-card" style={{ maxWidth: mode === 'signup' ? '520px' : '430px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Link to="/" className="brand-mark">
             {!logoError ? (
               <img
@@ -105,62 +144,102 @@ export default function AuthPage() {
           <button
             type="button"
             className={`auth-tab ${mode === 'login' ? 'active' : ''}`}
-            onClick={() => setMode('login')}
+            onClick={() => {
+              setMode('login');
+              setErrorMsg('');
+            }}
           >
             Client Log In
           </button>
           <button
             type="button"
             className={`auth-tab ${mode === 'signup' ? 'active' : ''}`}
-            onClick={() => setMode('signup')}
+            onClick={() => {
+              setMode('signup');
+              setErrorMsg('');
+            }}
           >
-            Create Account
+            Open Live Account
           </button>
         </div>
 
         {errorMsg && (
-          <div
-            style={{
-              background: 'var(--accent-crimson-soft)',
-              border: '1px solid var(--accent-crimson)',
-              padding: '10px 12px',
-              borderRadius: '6px',
-              fontSize: '13px',
-              marginBottom: '14px',
-            }}
-          >
-            {errorMsg}
-          </div>
+          <div className="auth-alert error">{errorMsg}</div>
         )}
-
         {infoMsg && (
-          <div
-            style={{
-              background: 'var(--positive-soft)',
-              border: '1px solid var(--positive)',
-              padding: '10px 12px',
-              borderRadius: '6px',
-              fontSize: '13px',
-              marginBottom: '14px',
-            }}
-          >
-            {infoMsg}
-          </div>
+          <div className="auth-alert success">{infoMsg}</div>
         )}
 
         <form onSubmit={handleSubmit}>
           {mode === 'signup' && (
-            <div className="form-group">
-              <label className="form-label">Full Legal Name</label>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Alex Mercer"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-              />
-            </div>
+            <>
+              <div className="auth-grid-2">
+                <div className="form-group">
+                  <label className="form-label">Full Legal Name</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Alex Mercer"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Trader Username</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="amercer_fx"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="auth-grid-2">
+                <div className="form-group">
+                  <label className="form-label">Country of Residence</label>
+                  <select
+                    className="form-control"
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                  >
+                    {COUNTRIES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Phone Number</label>
+                  <input
+                    type="tel"
+                    className="form-control"
+                    placeholder="+234 800 000 0000"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Base Account Currency</label>
+                <select
+                  className="form-control"
+                  value={accountCurrency}
+                  onChange={(e) => setAccountCurrency(e.target.value)}
+                >
+                  <option value="USD">USD — US Dollar</option>
+                  <option value="USDT">USDT — Tether Stablecoin</option>
+                  <option value="EUR">EUR — Euro</option>
+                  <option value="GBP">GBP — British Pound</option>
+                </select>
+              </div>
+            </>
           )}
 
           <div className="form-group">
@@ -177,28 +256,115 @@ export default function AuthPage() {
 
           <div className="form-group">
             <label className="form-label">Password</label>
-            <input
-              type="password"
-              className="form-control"
-              placeholder="••••••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                className="form-control"
+                placeholder="••••••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                style={{ paddingRight: '40px' }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '55%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                }}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
+
+          {mode === 'signup' && (
+            <>
+              <div className="password-meter">
+                <div className={`meter-bar ${strengthScore >= 1 ? 'active' : ''}`} />
+                <div className={`meter-bar ${strengthScore >= 2 ? 'active' : ''}`} />
+                <div className={`meter-bar ${strengthScore >= 3 ? 'active' : ''}`} />
+                <div className={`meter-bar ${strengthScore >= 4 ? 'active' : ''}`} />
+              </div>
+
+              <div className="password-checklist">
+                <span>{checks.length ? <Check size={12} /> : <X size={12} />} 8+ chars</span>
+                <span>{checks.upper ? <Check size={12} /> : <X size={12} />} Uppercase</span>
+                <span>{checks.number ? <Check size={12} /> : <X size={12} />} Number</span>
+                <span>{checks.special ? <Check size={12} /> : <X size={12} />} Symbol</span>
+              </div>
+
+              <div className="form-group" style={{ marginTop: '12px' }}>
+                <label className="form-label">Confirm Password</label>
+                <input
+                  type="password"
+                  className="form-control"
+                  placeholder="••••••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
+
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '8px',
+                  fontSize: '12px',
+                  color: 'var(--text-secondary)',
+                  marginBottom: '14px',
+                  cursor: 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={agreedTerms}
+                  onChange={(e) => setAgreedTerms(e.target.checked)}
+                  style={{ marginTop: '3px' }}
+                />
+                <span>
+                  I confirm I am at least 18 years old and agree to the EquivaultFX
+                  Client Terms, Anti-Money Laundering Policy, and Leveraged Risk Disclosure.
+                </span>
+              </label>
+            </>
+          )}
 
           <button
             type="submit"
             disabled={loading}
             className="btn btn-crimson"
-            style={{ width: '100%', marginTop: '8px' }}
+            style={{ width: '100%', marginTop: '6px' }}
           >
             {loading
-              ? 'Authenticating...'
+              ? 'Verifying Credentials...'
               : mode === 'login'
               ? 'Access Trading Terminal'
-              : 'Open EquivaultFX Account'}
+              : 'Create Verified Account'}
           </button>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              marginTop: '14px',
+              fontSize: '12px',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            <ShieldCheck size={14} color="#10B981" />
+            <span>256-Bit TLS Encrypted Session &amp; Role-Isolated Auth</span>
+          </div>
         </form>
       </div>
     </div>
