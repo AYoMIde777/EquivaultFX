@@ -5,7 +5,6 @@ import efxLogo from "../assets/EFX logo.jpg";
 import { supabase } from "../lib/supabase";
 
 const COUNTRIES = [
-  "Nigeria",
   "United Arab Emirates",
   "United Kingdom",
   "United States",
