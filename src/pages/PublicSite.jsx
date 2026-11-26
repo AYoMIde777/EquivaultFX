@@ -64,7 +64,7 @@ const TESTIMONIALS = [
     role: 'Quantitative Crypto Allocator • London',
     rating: 5,
     quote:
-      'Having live multi-asset charts, clear 5% BTC/ETH deposit gas routing, and structured liquidity tiers in one terminal keeps my workflow streamlined.',
+      'Having live multi-asset charts, clear wallet routing, and structured liquidity tiers in one terminal keeps my workflow streamlined.',
     metric: '$42,000 Managed Tier',
   },
   {
@@ -80,31 +80,31 @@ const TESTIMONIALS = [
     role: 'Multi-Asset Day Trader • Lagos',
     rating: 4.8,
     quote:
-      'No mandatory KYC friction to get started, responsive support at info@equivaultfx.com, and straightforward fee visibility before I confirm any transfer.',
+      'Fast account setup, responsive support at info@equivaultfx.com, and straightforward execution across BTC/USDT and major markets.',
     metric: '24/7 Active Execution',
   },
 ];
 
 const FAQS = [
   {
-    q: 'How do deposits and the 5% deposit gas fee work on EquivaultFX?',
-    a: 'When funding your account, you send your main deposit amount to the selected deposit wallet and send a separate 5% gas fee in BTC (bc1q3yh6qpja5p05jghul86myefmtgssxegp0e6424) or ETH (0x442649Bec5815563722154d5EEDE79cCCA98aF67) to the designated fee address.',
+    q: 'How fast are crypto deposits and withdrawals processed on EquivaultFX?',
+    a: 'USDT (TRC20/ERC20/BEP20), BTC, and ETH deposits credit upon network confirmation. Approved withdrawal requests are dispatched to your receiving wallet address within 15 to 60 minutes.',
   },
   {
-    q: 'Why is the 5% deposit gas fee sent separately in BTC or ETH?',
-    a: 'Separating the 5% gas fee into dedicated BTC or ETH routing keeps your main deposit allocation clean while covering settlement and network fee handling.',
+    q: 'How are withdrawal gas fees handled on EquivaultFX?',
+    a: 'Withdrawal requests display the exact 10% gas fee upfront before you confirm the transaction, with full ledger tracking inside your dashboard history.',
   },
   {
-    q: 'How fast are crypto deposits and withdrawals processed?',
-    a: 'Once your main deposit and separate 5% BTC/ETH gas transfer are submitted and confirmed, deposits credit to your balance upon verification. Approved withdrawals are dispatched to your receiving address within 15 to 60 minutes.',
+    q: 'How is EquivaultFX different from standard retail trading platforms?',
+    a: 'EquivaultFX pairs institutional multi-asset market feeds and managed liquidity tiers with dedicated deposit and withdrawal flows, 4-digit withdrawal PIN protection, and cold-storage reserve custody.',
   },
   {
-    q: 'Is KYC required to trade, deposit, or withdraw?',
-    a: 'No. KYC is optional on EquivaultFX—you can trade, deposit, and submit withdrawals without mandatory identity verification.',
+    q: 'How do I complete KYC verification?',
+    a: 'Open the KYC tab inside your dashboard, select your document type, and upload your government ID image and selfie for review.',
   },
   {
     q: 'Which markets can I monitor and trade?',
-    a: 'EquivaultFX provides live institutional feeds across major and minor Forex pairs, Cryptocurrencies, Global Stock Indices, and Spot Metals & Energy Commodities.',
+    a: 'EquivaultFX provides live institutional feeds across BTC/USDT, major and minor Forex pairs, Cryptocurrencies, Global Stock Indices, and Spot Metals & Energy Commodities.',
   },
   {
     q: 'Does the trading dashboard work smoothly on mobile devices?',
@@ -112,7 +112,7 @@ const FAQS = [
   },
   {
     q: 'How is my account and withdrawal activity secured?',
-    a: 'Accounts use password strength validation, encrypted sessions, an optional 4-digit withdrawal security PIN, and role-isolated database access.',
+    a: 'Accounts use password strength validation, encrypted sessions, a 4-digit withdrawal security PIN, and role-isolated database access.',
   },
 ];
 
@@ -125,7 +125,6 @@ export default function PublicSite() {
   const days = [14, 21, 30];
   const dailyReturn = (Number(calcAmount) || 0) * rates[calcPlanIdx];
   const totalReturn = dailyReturn * days[calcPlanIdx];
-  const depositGasPreview = (Number(calcAmount) || 0) * 0.05;
 
   return (
     <div className="public-wrapper">
@@ -174,7 +173,7 @@ export default function PublicSite() {
             </div>
 
             <h1 className="hero-title">
-              Precision Execution Across Forex, Crypto &amp; Global Indices.
+              Precision Execution Across Crypto, Forex &amp; Global Indices.
             </h1>
 
             <p className="hero-subtitle">
@@ -198,8 +197,8 @@ export default function PublicSite() {
                 <div className="hero-stat-label">Raw ECN Spreads</div>
               </div>
               <div>
-                <div className="hero-stat-val">5% Gas</div>
-                <div className="hero-stat-label">Separate BTC / ETH Fee</div>
+                <div className="hero-stat-val">&lt; 25 ms</div>
+                <div className="hero-stat-label">Order Routing Latency</div>
               </div>
               <div>
                 <div className="hero-stat-val">24 / 7</div>
@@ -259,9 +258,9 @@ export default function PublicSite() {
             settlement in a single workspace.
           </p>
           <p style={{ fontSize: '13.5px', color: 'var(--text-secondary)', marginBottom: '18px' }}>
-            From monitoring live Forex pairs, cryptocurrencies, global indices, and
-            spot gold to managing open positions and tracking deposit or withdrawal
-            gas fees, every workflow is organized for clarity and speed.
+            From monitoring BTC/USDT, live Forex pairs, global indices, and
+            spot gold to managing open positions with stop-loss protection and
+            tracking transactions, every workflow is organized for clarity and speed.
           </p>
 
           <div className="hero-stats tabular" style={{ marginTop: 0 }}>
@@ -270,8 +269,8 @@ export default function PublicSite() {
               <div className="hero-stat-label">Average Trader Rating</div>
             </div>
             <div>
-              <div className="hero-stat-val">Multi-Asset</div>
-              <div className="hero-stat-label">Forex, Crypto, Indices &amp; Gold</div>
+              <div className="hero-stat-val">BTC/USDT</div>
+              <div className="hero-stat-label">Primary Trading Instrument</div>
             </div>
             <div>
               <div className="hero-stat-val">24 / 7</div>
@@ -286,7 +285,7 @@ export default function PublicSite() {
           <div>
             <div className="section-kicker">Real-Time Data</div>
             <h2 className="section-title">
-              Forex, Crypto, Indices &amp; Commodities
+              Crypto, Forex, Indices &amp; Commodities
             </h2>
           </div>
           <Link to="/dashboard" className="btn btn-outline btn-sm">
@@ -329,8 +328,8 @@ export default function PublicSite() {
                     <strong>{plan.max}</strong>
                   </li>
                   <li>
-                    <span>Deposit Gas Fee</span>
-                    <strong>5% (BTC / ETH)</strong>
+                    <span>Settlement Speed</span>
+                    <strong>{plan.payout}</strong>
                   </li>
                 </ul>
               </div>
@@ -398,9 +397,6 @@ export default function PublicSite() {
             <div style={{ fontSize: '12px', color: 'var(--positive)' }}>
               +${dailyReturn.toLocaleString(undefined, { maximumFractionDigits: 2 })} / day
             </div>
-            <div className="tabular" style={{ fontSize: '11.5px', color: '#fda4af', marginTop: '4px' }}>
-              Separate 5% Deposit Gas: ${depositGasPreview.toFixed(2)} (BTC or ETH)
-            </div>
           </div>
         </div>
       </section>
@@ -429,10 +425,10 @@ export default function PublicSite() {
             <div className="feature-icon">
               <Lock size={20} />
             </div>
-            <h4 style={{ marginBottom: '8px' }}>5% BTC / ETH Fee Routing</h4>
+            <h4 style={{ marginBottom: '8px' }}>PIN &amp; Address Checks</h4>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              Deposit gas fees (5%) are sent separately to dedicated BTC or ETH
-              fee wallets so funding records stay clear and traceable.
+              4-digit withdrawal security PIN verification and address checks
+              protect outbound transfers.
             </p>
           </div>
 
@@ -440,10 +436,10 @@ export default function PublicSite() {
             <div className="feature-icon">
               <Zap size={20} />
             </div>
-            <h4 style={{ marginBottom: '8px' }}>Frictionless Access</h4>
+            <h4 style={{ marginBottom: '8px' }}>Stop-Loss Execution</h4>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              Trade, deposit, and request withdrawals without mandatory KYC
-              bottlenecks.
+              Set margin amounts and stop-loss levels directly inside the live
+              trading ticket.
             </p>
           </div>
 
@@ -585,7 +581,7 @@ export default function PublicSite() {
                 EquivaultFX Client Support
               </strong>
               <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                24/7 assistance for account onboarding, deposits, 5% BTC/ETH gas fee transfers, and withdrawals.
+                24/7 assistance for account onboarding, deposits, withdrawals, and platform navigation.
               </div>
             </div>
 
@@ -600,11 +596,6 @@ export default function PublicSite() {
                 <LifeBuoy size={14} /> Client Portal
               </Link>
             </div>
-          </div>
-
-          <div className="site-footer-block">
-            <strong>Deposit &amp; Gas Fee Notice:</strong> Deposits require a
-            separate 5% gas fee sent in BTC (<span className="tabular">bc1q3yh6qpja5p05jghul86myefmtgssxegp0e6424</span>) or ETH (<span className="tabular">0x442649Bec5815563722154d5EEDE79cCCA98aF67</span>) alongside the selected deposit transfer. Always verify receiving addresses and networks before sending funds.
           </div>
 
           <div className="site-footer-block">
