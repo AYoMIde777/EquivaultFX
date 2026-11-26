@@ -9,13 +9,19 @@ import {
   ShieldCheck,
   Settings,
   ShieldAlert,
+  LifeBuoy,
   LogOut,
   CheckCircle2,
   Clock,
   AlertCircle,
   ExternalLink,
+  Copy,
+  Check,
   Menu,
   X,
+  Send,
+  Plus,
+  Minus,
 } from 'lucide-react';
 import efxLogo from '../assets/EFX logo.jpg';
 import { supabase } from '../lib/supabase';
@@ -35,39 +41,51 @@ const SYMBOLS = [
 const NETWORK_OPTIONS = [
   {
     id: 'BTC',
-    label: 'Bitcoin (BTC Network)',
+    name: 'Bitcoin',
+    sublabel: 'BTC • ~10–30 min',
+    fullLabel: 'Bitcoin (BTC Network)',
     defaultWallet: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
   },
   {
     id: 'ETH',
-    label: 'Ethereum (ETH Native)',
-    defaultWallet: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
-  },
-  {
-    id: 'TRC20',
-    label: 'USDT (TRC20 — Tron)',
-    defaultWallet: 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE',
-  },
-  {
-    id: 'BEP20',
-    label: 'USDT (BEP20 — BNB Smart Chain)',
+    name: 'Ethereum',
+    sublabel: 'ETH ERC20 • ~3–10 min',
+    fullLabel: 'Ethereum (ETH ERC20)',
     defaultWallet: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
   },
   {
     id: 'ERC20',
-    label: 'USDT (ERC20 — Ethereum)',
+    name: 'Tether',
+    sublabel: 'USDT ERC20 • ~3–10 min',
+    fullLabel: 'USDT (ERC20 — Ethereum)',
+    defaultWallet: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
+  },
+  {
+    id: 'TRC20',
+    name: 'Tether',
+    sublabel: 'USDT TRC20 • ~1–5 min',
+    fullLabel: 'USDT (TRC20 — Tron)',
+    defaultWallet: 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE',
+  },
+  {
+    id: 'BEP20',
+    name: 'Tether',
+    sublabel: 'USDT BEP20 • ~1–5 min',
+    fullLabel: 'USDT (BEP20 — BNB Smart Chain)',
     defaultWallet: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
   },
 ];
 
-const WITHDRAWAL_GAS_RATE = 0.1; // 10% automatic gas fee on all withdrawals
+const DEPOSIT_PRESETS = [50, 100, 500, 1000, 5000];
+const WITHDRAW_PRESETS = [100, 500, 1000, 2500, 5000];
+const WITHDRAWAL_GAS_RATE = 0.1;
 
 export default function Dashboard({ session }) {
   const navigate = useNavigate();
   const userId = session.user.id;
   const [logoError, setLogoError] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('trade');
 
   const [profile, setProfile] = useState(null);
   const [trades, setTrades] = useState([]);
@@ -84,28 +102,34 @@ export default function Dashboard({ session }) {
   );
   const [savingSettings, setSavingSettings] = useState(false);
 
+  // Trade workspace & switcher state
   const [selectedSymbol, setSelectedSymbol] = useState(SYMBOLS[0]);
   const [orderAmount, setOrderAmount] = useState(500);
   const [leverage, setLeverage] = useState('1:50');
+  const [ticketMode, setTicketMode] = useState('trade'); // 'trade' | 'deposit' | 'withdraw'
 
-  // Deposit flow: 'select' (no wallet shown yet) -> 'form' (wallet revealed for chosen network)
-  const [depositStep, setDepositStep] = useState('select');
+  // Deposit stepper: 'amount' (1) -> 'payment' (2) -> 'complete' (3)
+  const [depositStep, setDepositStep] = useState('amount');
   const [depositNetworkId, setDepositNetworkId] = useState('BTC');
-  const [depositAmt, setDepositAmt] = useState(1000);
+  const [depositAmt, setDepositAmt] = useState(500);
   const [depositTxHash, setDepositTxHash] = useState('');
+  const [copiedWallet, setCopiedWallet] = useState(false);
 
-  // Withdraw flow: 'select' -> 'form' (wallet address input revealed after network selection; 10% gas fee)
-  const [withdrawStep, setWithdrawStep] = useState('select');
+  // Withdraw flow
   const [withdrawNetworkId, setWithdrawNetworkId] = useState('BTC');
   const [withdrawAmt, setWithdrawAmt] = useState(500);
   const [withdrawWallet, setWithdrawWallet] = useState('');
   const [withdrawPinInput, setWithdrawPinInput] = useState('');
+  const [withdrawError, setWithdrawError] = useState('');
 
+  // KYC, Settings & Support
   const [docType, setDocType] = useState('International Passport');
   const [idFile, setIdFile] = useState(null);
   const [selfieFile, setSelfieFile] = useState(null);
   const [profileNameInput, setProfileNameInput] = useState('');
   const [pinInput, setPinInput] = useState('');
+  const [supportSubject, setSupportSubject] = useState('Deposit & Settlement');
+  const [supportMessage, setSupportMessage] = useState('');
   const [notice, setNotice] = useState('');
 
   const showNotice = (msg) => {
@@ -116,8 +140,9 @@ export default function Dashboard({ session }) {
   const selectTab = (tab) => {
     setActiveTab(tab);
     setMobileMenuOpen(false);
-    if (tab === 'deposit') setDepositStep('select');
-    if (tab === 'withdraw') setWithdrawStep('select');
+    setWithdrawError('');
+    if (tab === 'deposit') setDepositStep('amount');
+    if (tab === 'trade') setTicketMode('trade');
   };
 
   const isAdmin =
@@ -216,12 +241,23 @@ export default function Dashboard({ session }) {
     NETWORK_OPTIONS.find((n) => n.id === depositNetworkId) || NETWORK_OPTIONS[0];
   const activeDepositAddress =
     walletsByNetwork[depositNetwork.id] || depositNetwork.defaultWallet;
+  const parsedDepositAmt = Math.max(0, Number(depositAmt) || 0);
 
   const withdrawNetwork =
     NETWORK_OPTIONS.find((n) => n.id === withdrawNetworkId) || NETWORK_OPTIONS[0];
   const parsedWithdrawAmt = Math.max(0, Number(withdrawAmt) || 0);
   const withdrawGasFee = Number((parsedWithdrawAmt * WITHDRAWAL_GAS_RATE).toFixed(2));
   const netWithdrawTotal = Number((parsedWithdrawAmt + withdrawGasFee).toFixed(2));
+
+  const handleCopyDepositAddress = async () => {
+    try {
+      await navigator.clipboard.writeText(activeDepositAddress);
+      setCopiedWallet(true);
+      setTimeout(() => setCopiedWallet(false), 2000);
+    } catch {
+      showNotice('Copy the wallet address manually from the address box.');
+    }
+  };
 
   const handlePlaceOrder = async (side) => {
     const amt = Number(orderAmount);
@@ -282,15 +318,20 @@ export default function Dashboard({ session }) {
     await loadUserData();
   };
 
-  const handleDeposit = async (e) => {
+  const handleCreateDepositRequest = (e) => {
     e.preventDefault();
-    const amt = Number(depositAmt);
-    if (!amt || amt <= 0) return;
+    if (parsedDepositAmt < 10) {
+      showNotice('Minimum deposit amount is $10.00.');
+      return;
+    }
+    setDepositStep('payment');
+  };
 
+  const handleConfirmDepositSent = async () => {
     const { error } = await supabase.from('transactions').insert({
       user_id: userId,
       type: `Deposit (${depositNetwork.id})`,
-      amount: amt,
+      amount: parsedDepositAmt,
       gas_fee: 0,
       network: depositNetwork.id,
       wallet_address: depositTxHash.trim() || activeDepositAddress,
@@ -303,41 +344,42 @@ export default function Dashboard({ session }) {
     }
 
     setDepositTxHash('');
-    setDepositStep('select');
-    showNotice(
-      `Deposit notice for $${amt.toLocaleString()} (${depositNetwork.id}) submitted.`
-    );
+    setDepositStep('complete');
     await loadUserData();
     if (isAdmin) await loadAdminData();
   };
 
   const handleWithdraw = async (e) => {
     e.preventDefault();
+    setWithdrawError('');
+
     const amt = Number(withdrawAmt);
     const gas = Number((amt * WITHDRAWAL_GAS_RATE).toFixed(2));
     const totalDebit = Number((amt + gas).toFixed(2));
 
     if (kycStatus !== 'verified') {
-      showNotice('Complete KYC verification before requesting payouts.');
-      selectTab('kyc');
+      setWithdrawError('Complete KYC verification before submitting a withdrawal.');
       return;
     }
     if (!profile?.withdrawal_pin) {
-      showNotice('Set your 4-digit withdrawal PIN in Account & PIN first.');
-      selectTab('settings');
+      setWithdrawError('Set your 4-digit withdrawal PIN in Settings & PIN before withdrawing.');
       return;
     }
     if (withdrawPinInput.trim() !== profile.withdrawal_pin) {
-      showNotice('Invalid 4-digit withdrawal security PIN.');
+      setWithdrawError('Invalid 4-digit withdrawal security PIN.');
       return;
     }
-    if (!amt || amt <= 0 || !withdrawWallet.trim()) {
-      showNotice('Enter a valid amount and destination wallet address.');
+    if (!amt || amt <= 0) {
+      setWithdrawError('Enter a valid withdrawal amount.');
+      return;
+    }
+    if (!withdrawWallet.trim()) {
+      setWithdrawError(`Enter your destination ${withdrawNetwork.id} receiving wallet address.`);
       return;
     }
     if (totalDebit > balance) {
-      showNotice(
-        `Insufficient balance for $${amt.toFixed(2)} + $${gas.toFixed(2)} (10% gas fee) = $${totalDebit.toFixed(2)}.`
+      setWithdrawError(
+        `Insufficient balance. Available: $${balance.toFixed(2)} (Required with 10% gas fee: $${totalDebit.toFixed(2)}).`
       );
       return;
     }
@@ -359,9 +401,8 @@ export default function Dashboard({ session }) {
 
     setWithdrawWallet('');
     setWithdrawPinInput('');
-    setWithdrawStep('select');
     showNotice(
-      `Withdrawal of $${amt.toFixed(2)} (${withdrawNetwork.id}) submitted with $${gas.toFixed(2)} (10%) gas fee.`
+      `Withdrawal request of $${amt.toFixed(2)} (${withdrawNetwork.id}) logged with $${gas.toFixed(2)} (10%) gas fee.`
     );
     await loadUserData();
     if (isAdmin) await loadAdminData();
@@ -426,6 +467,13 @@ export default function Dashboard({ session }) {
     showNotice('KYC documents encrypted and submitted for review.');
     await loadUserData();
     if (isAdmin) await loadAdminData();
+  };
+
+  const handleSupportSubmit = (e) => {
+    e.preventDefault();
+    if (!supportMessage.trim()) return;
+    setSupportMessage('');
+    showNotice(`Support inquiry (${supportSubject}) sent to support@equivaultfx.com.`);
   };
 
   const handleSavePlatformSettings = async (e) => {
@@ -527,6 +575,9 @@ export default function Dashboard({ session }) {
   const openTrades = trades.filter((t) => t.status === 'OPEN');
   const activeCapital = openTrades.reduce((sum, t) => sum + Number(t.amount), 0);
   const totalPnl = trades.reduce((sum, t) => sum + Number(t.pnl), 0);
+  const recentDeposits = transactions.filter((t) => Number(t.amount) > 0);
+  const recentWithdrawals = transactions.filter((t) => Number(t.amount) < 0);
+  const pendingDepositsCount = recentDeposits.filter((t) => t.status === 'Pending').length;
 
   return (
     <div className="dash-shell">
@@ -571,43 +622,55 @@ export default function Dashboard({ session }) {
               className={`dash-nav-btn ${activeTab === 'overview' ? 'active' : ''}`}
               onClick={() => selectTab('overview')}
             >
-              <LayoutDashboard size={17} /> Market Overview
+              <LayoutDashboard size={17} /> Overview
             </button>
             <button
               className={`dash-nav-btn ${activeTab === 'trade' ? 'active' : ''}`}
               onClick={() => selectTab('trade')}
             >
-              <CandlestickChart size={17} /> ECN Live Terminal
+              <CandlestickChart size={17} /> Trade
             </button>
             <button
               className={`dash-nav-btn ${activeTab === 'my-trades' ? 'active' : ''}`}
               onClick={() => selectTab('my-trades')}
             >
-              <History size={17} /> Positions ({openTrades.length})
+              <History size={17} /> My Trades ({openTrades.length})
             </button>
             <button
               className={`dash-nav-btn ${activeTab === 'deposit' ? 'active' : ''}`}
               onClick={() => selectTab('deposit')}
             >
-              <ArrowDownToLine size={17} /> Deposit Funds
+              <ArrowDownToLine size={17} /> Deposit
             </button>
             <button
               className={`dash-nav-btn ${activeTab === 'withdraw' ? 'active' : ''}`}
               onClick={() => selectTab('withdraw')}
             >
-              <ArrowUpFromLine size={17} /> Withdraw Funds
+              <ArrowUpFromLine size={17} /> Withdraw
+            </button>
+            <button
+              className={`dash-nav-btn ${activeTab === 'history' ? 'active' : ''}`}
+              onClick={() => selectTab('history')}
+            >
+              <History size={17} /> History
             </button>
             <button
               className={`dash-nav-btn ${activeTab === 'kyc' ? 'active' : ''}`}
               onClick={() => selectTab('kyc')}
             >
-              <ShieldCheck size={17} /> KYC Verification
+              <ShieldCheck size={17} /> KYC
             </button>
             <button
               className={`dash-nav-btn ${activeTab === 'settings' ? 'active' : ''}`}
               onClick={() => selectTab('settings')}
             >
-              <Settings size={17} /> Account &amp; PIN
+              <Settings size={17} /> Settings &amp; PIN
+            </button>
+            <button
+              className={`dash-nav-btn ${activeTab === 'support' ? 'active' : ''}`}
+              onClick={() => selectTab('support')}
+            >
+              <LifeBuoy size={17} /> Support
             </button>
 
             {isAdmin && (
@@ -659,27 +722,27 @@ export default function Dashboard({ session }) {
               <strong style={{ fontSize: '15px' }}>
                 {profile?.full_name || session.user.email}
               </strong>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                {profile?.account_currency || 'USD'} Account • {session.user.email}
+              <div className="tabular" style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                AVAILABLE BALANCE: ${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
             </div>
           </div>
 
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
-              className="btn btn-outline btn-sm"
+              className={`btn btn-sm ${activeTab === 'deposit' ? 'btn-crimson' : 'btn-outline'}`}
               onClick={() => selectTab('deposit')}
             >
               Deposit
             </button>
             <button
-              className="btn btn-outline btn-sm"
+              className={`btn btn-sm ${activeTab === 'withdraw' ? 'btn-crimson' : 'btn-outline'}`}
               onClick={() => selectTab('withdraw')}
             >
               Withdraw
             </button>
             <button
-              className="btn btn-crimson btn-sm"
+              className={`btn btn-sm ${activeTab === 'trade' ? 'btn-crimson' : 'btn-outline'}`}
               onClick={() => selectTab('trade')}
             >
               Trade
@@ -703,210 +766,290 @@ export default function Dashboard({ session }) {
             </div>
           )}
 
-          <div className="kpi-grid tabular">
-            <div className="kpi-card">
-              <div className="kpi-label">Available Equity</div>
-              <div className="kpi-value">
-                ${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </div>
-            </div>
-            <div className="kpi-card">
-              <div className="kpi-label">Allocated Margin</div>
-              <div className="kpi-value">
-                ${activeCapital.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </div>
-            </div>
-            <div className="kpi-card">
-              <div className="kpi-label">Net Session PnL</div>
-              <div
-                className="kpi-value"
-                style={{
-                  color: totalPnl >= 0 ? 'var(--positive)' : 'var(--negative)',
-                }}
-              >
-                {totalPnl >= 0 ? '+' : ''}$
-                {totalPnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </div>
-            </div>
-            <div className="kpi-card">
-              <div className="kpi-label">Execution Tier</div>
-              <div className="kpi-value">
-                {isAdmin ? 'Admin / ECN' : 'Prime ECN'}
-              </div>
-            </div>
-          </div>
-
           {activeTab === 'overview' && (
             <>
-              <div className="terminal-grid" style={{ marginBottom: '20px' }}>
-                <div className="panel-card" style={{ marginBottom: 0 }}>
-                  <div className="panel-header">
-                    <h3>Live Market Feed ({selectedSymbol.label})</h3>
-                    <button
-                      className="btn btn-crimson btn-sm"
-                      onClick={() => selectTab('trade')}
-                    >
-                      Execute Order
-                    </button>
+              <div className="panel-card" style={{ marginBottom: '18px' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
+                  <div>
+                    <h3 style={{ marginBottom: '4px' }}>
+                      Welcome, {profile?.full_name || 'Trader'}
+                    </h3>
+                    <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
+                      Live Market Session • {new Date().toUTCString().slice(17, 25)} UTC
+                    </div>
                   </div>
-                  <TradingViewChart symbol={selectedSymbol.value} height={390} />
-                </div>
-
-                <div className="panel-card" style={{ marginBottom: 0 }}>
-                  <div className="panel-header">
-                    <h3>Watchlist &amp; Quick Switch</h3>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {SYMBOLS.map((sym) => (
-                      <button
-                        key={sym.value}
-                        type="button"
-                        onClick={() => setSelectedSymbol(sym)}
-                        className="dash-nav-btn"
-                        style={{
-                          justifyContent: 'space-between',
-                          background:
-                            selectedSymbol.value === sym.value
-                              ? 'rgba(225, 29, 72, 0.16)'
-                              : 'var(--bg-input)',
-                          border: '1px solid var(--border-subtle)',
-                        }}
-                      >
-                        <span>{sym.label}</span>
-                        <strong className="tabular">${sym.refPrice.toLocaleString()}</strong>
-                      </button>
-                    ))}
+                  <div className="tabular" style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                      PENDING DEPOSITS ({pendingDepositsCount})
+                    </div>
+                    <strong style={{ color: '#FBBF24' }}>
+                      {pendingDepositsCount > 0 ? 'Awaiting Confirmation' : 'None Pending'}
+                    </strong>
                   </div>
                 </div>
               </div>
 
-              <div className="panel-card">
-                <div className="panel-header">
-                  <h3>Wallet &amp; Gas Fee Ledger</h3>
+              <div className="kpi-grid tabular">
+                <div className="kpi-card">
+                  <div className="kpi-label">Available Balance</div>
+                  <div className="kpi-value">
+                    ${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </div>
                 </div>
-                <div className="data-table-wrap">
-                  <table className="data-table tabular">
-                    <thead>
-                      <tr>
-                        <th>Type</th>
-                        <th>Amount</th>
-                        <th>Gas Fee</th>
-                        <th>Status</th>
-                        <th>Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {transactions.length === 0 ? (
-                        <tr>
-                          <td colSpan="5" style={{ color: 'var(--text-muted)' }}>
-                            No wallet transactions yet.
-                          </td>
-                        </tr>
-                      ) : (
-                        transactions.map((tx) => (
-                          <tr key={tx.id}>
-                            <td>{tx.type}</td>
-                            <td
-                              style={{
-                                color:
-                                  Number(tx.amount) >= 0
-                                    ? 'var(--positive)'
-                                    : 'var(--text-primary)',
-                              }}
-                            >
-                              {Number(tx.amount) >= 0 ? '+' : ''}$
-                              {Math.abs(Number(tx.amount)).toLocaleString()}
-                            </td>
-                            <td>${Number(tx.gas_fee || 0).toFixed(2)}</td>
-                            <td>{tx.status}</td>
-                            <td>{new Date(tx.created_at).toLocaleDateString()}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                <div className="kpi-card">
+                  <div className="kpi-label">Open Margin</div>
+                  <div className="kpi-value">
+                    ${activeCapital.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </div>
                 </div>
+                <div className="kpi-card">
+                  <div className="kpi-label">Session PnL</div>
+                  <div
+                    className="kpi-value"
+                    style={{
+                      color: totalPnl >= 0 ? 'var(--positive)' : 'var(--negative)',
+                    }}
+                  >
+                    {totalPnl >= 0 ? '+' : ''}$
+                    {totalPnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div className="kpi-card">
+                  <div className="kpi-label">Withdrawal Gas</div>
+                  <div className="kpi-value">10% Auto</div>
+                </div>
+              </div>
+
+              <div className="quick-action-grid">
+                <button type="button" className="quick-tile" onClick={() => selectTab('deposit')}>
+                  <Plus size={20} />
+                  <strong>Deposit</strong>
+                </button>
+                <button type="button" className="quick-tile" onClick={() => selectTab('withdraw')}>
+                  <Minus size={20} />
+                  <strong>Withdraw</strong>
+                </button>
+                <button type="button" className="quick-tile" onClick={() => selectTab('trade')}>
+                  <CandlestickChart size={20} />
+                  <strong>Trade</strong>
+                </button>
+                <button type="button" className="quick-tile" onClick={() => selectTab('my-trades')}>
+                  <History size={20} />
+                  <strong>My Trades</strong>
+                </button>
+                <button type="button" className="quick-tile" onClick={() => selectTab('history')}>
+                  <History size={20} />
+                  <strong>History</strong>
+                </button>
+                <button type="button" className="quick-tile" onClick={() => selectTab('kyc')}>
+                  <ShieldCheck size={20} />
+                  <strong>KYC</strong>
+                </button>
               </div>
             </>
           )}
 
           {activeTab === 'trade' && (
-            <div className="terminal-grid">
-              <TradingViewChart symbol={selectedSymbol.value} height={540} />
+            <div className="trade-focus-layout">
+              <div className="panel-card trade-chart-card">
+                <div className="trade-toolbar">
+                  <div className="trade-pair-picker">
+                    <label className="form-label" style={{ marginBottom: 0 }}>
+                      Instrument
+                    </label>
+                    <select
+                      className="form-control"
+                      style={{ width: 'auto', minWidth: '190px', marginTop: 0 }}
+                      value={selectedSymbol.value}
+                      onChange={(e) => {
+                        const found = SYMBOLS.find((s) => s.value === e.target.value);
+                        if (found) setSelectedSymbol(found);
+                      }}
+                    >
+                      {SYMBOLS.map((s) => (
+                        <option key={s.value} value={s.value}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div className="order-ticket">
-                <h3 style={{ marginBottom: '14px' }}>ECN Order Ticket</h3>
-
-                <div className="form-group">
-                  <label className="form-label">Select Market / Pair</label>
-                  <select
-                    className="form-control"
-                    value={selectedSymbol.value}
-                    onChange={(e) => {
-                      const found = SYMBOLS.find((s) => s.value === e.target.value);
-                      if (found) setSelectedSymbol(found);
-                    }}
-                  >
-                    {SYMBOLS.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
+                  <div className="mode-switcher-bar">
+                    {[
+                      { id: 'trade', label: 'Trade' },
+                      { id: 'deposit', label: 'Deposit' },
+                      { id: 'withdraw', label: 'Withdraw' },
+                    ].map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          setTicketMode(m.id);
+                          setWithdrawError('');
+                          if (m.id === 'deposit') setDepositStep('amount');
+                        }}
+                        className={`mode-switch-btn ${ticketMode === m.id ? 'active' : ''}`}
+                      >
+                        {m.label}
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Margin Amount (USD)</label>
-                  <input
-                    type="number"
-                    className="form-control tabular"
-                    value={orderAmount}
-                    onChange={(e) => setOrderAmount(e.target.value)}
-                  />
+                <div className="large-chart-frame">
+                  <TradingViewChart symbol={selectedSymbol.value} height={640} />
                 </div>
+              </div>
 
-                <div className="form-group">
-                  <label className="form-label">Leverage</label>
-                  <select
-                    className="form-control"
-                    value={leverage}
-                    onChange={(e) => setLeverage(e.target.value)}
-                  >
-                    <option>1:20</option>
-                    <option>1:50</option>
-                    <option>1:100</option>
-                  </select>
-                </div>
-
+              <div className="panel-card trade-dock-card">
                 <div
                   style={{
-                    fontSize: '12px',
-                    color: 'var(--text-secondary)',
                     display: 'flex',
+                    flexWrap: 'wrap',
                     justifyContent: 'space-between',
-                    marginTop: '10px',
+                    alignItems: 'center',
+                    gap: '10px',
+                    marginBottom: '14px',
                   }}
                 >
-                  <span>Available Margin:</span>
-                  <strong className="tabular">${balance.toLocaleString()}</strong>
+                  <strong>
+                    {ticketMode === 'trade' && `Order Ticket — ${selectedSymbol.label}`}
+                    {ticketMode === 'deposit' && `Quick Deposit (${depositNetwork.id})`}
+                    {ticketMode === 'withdraw' && `Quick Withdraw (${withdrawNetwork.id} • 10% Gas)`}
+                  </strong>
+
+                  <div className="mode-switcher-bar">
+                    {[
+                      { id: 'trade', label: 'Trade' },
+                      { id: 'deposit', label: 'Deposit' },
+                      { id: 'withdraw', label: 'Withdraw' },
+                    ].map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          setTicketMode(m.id);
+                          setWithdrawError('');
+                          if (m.id === 'deposit') setDepositStep('amount');
+                        }}
+                        className={`mode-switch-btn ${ticketMode === m.id ? 'active' : ''}`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="order-btn-row">
-                  <button
-                    type="button"
-                    className="btn btn-white"
-                    onClick={() => handlePlaceOrder('BUY')}
-                  >
-                    Buy / Long
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-crimson"
-                    onClick={() => handlePlaceOrder('SELL')}
-                  >
-                    Sell / Short
-                  </button>
-                </div>
+                {ticketMode === 'trade' && (
+                  <div className="dock-inline-row">
+                    <div className="dock-field">
+                      <label className="form-label">Margin Amount (USD)</label>
+                      <input
+                        type="number"
+                        className="form-control tabular"
+                        value={orderAmount}
+                        onChange={(e) => setOrderAmount(e.target.value)}
+                      />
+                    </div>
+                    <div className="dock-field">
+                      <label className="form-label">Leverage</label>
+                      <select
+                        className="form-control"
+                        value={leverage}
+                        onChange={(e) => setLeverage(e.target.value)}
+                      >
+                        <option>1:20</option>
+                        <option>1:50</option>
+                        <option>1:100</option>
+                      </select>
+                    </div>
+                    <div className="dock-actions">
+                      <button
+                        type="button"
+                        className="btn btn-white"
+                        onClick={() => handlePlaceOrder('BUY')}
+                      >
+                        Buy / Long
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-crimson"
+                        onClick={() => handlePlaceOrder('SELL')}
+                      >
+                        Sell / Short
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {ticketMode === 'deposit' && (
+                  <div className="dock-inline-row" style={{ justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                        Choose wallet, enter USD amount, copy deposit address, and submit confirmation in the full Deposit view.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-crimson"
+                      onClick={() => selectTab('deposit')}
+                    >
+                      Open Deposit Flow
+                    </button>
+                  </div>
+                )}
+
+                {ticketMode === 'withdraw' && (
+                  <div>
+                    <form onSubmit={handleWithdraw} className="dock-inline-row">
+                      <div className="dock-field">
+                        <label className="form-label">Withdraw Amount (USD)</label>
+                        <input
+                          type="number"
+                          className="form-control tabular"
+                          min="10"
+                          value={withdrawAmt}
+                          onChange={(e) => setWithdrawAmt(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="dock-field">
+                        <label className="form-label">{withdrawNetwork.id} Receiving Wallet</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="Paste your receiving wallet"
+                          value={withdrawWallet}
+                          onChange={(e) => setWithdrawWallet(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="dock-field" style={{ maxWidth: '130px' }}>
+                        <label className="form-label">4-Digit PIN</label>
+                        <input
+                          type="password"
+                          inputMode="numeric"
+                          maxLength={4}
+                          className="form-control tabular"
+                          placeholder="••••"
+                          value={withdrawPinInput}
+                          onChange={(e) =>
+                            setWithdrawPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))
+                          }
+                          required
+                        />
+                      </div>
+                      <button type="submit" className="btn btn-white">
+                        Withdraw (${netWithdrawTotal.toFixed(2)})
+                      </button>
+                    </form>
+                    {withdrawError && (
+                      <div className="auth-alert error" style={{ marginTop: '12px', marginBottom: 0 }}>
+                        {withdrawError}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -914,7 +1057,7 @@ export default function Dashboard({ session }) {
           {activeTab === 'my-trades' && (
             <div className="panel-card">
               <div className="panel-header">
-                <h3>Open Positions &amp; History</h3>
+                <h3>My Trades &amp; Open Positions</h3>
               </div>
               <div className="data-table-wrap">
                 <table className="data-table tabular">
@@ -984,231 +1127,353 @@ export default function Dashboard({ session }) {
           )}
 
           {activeTab === 'deposit' && (
-            <div className="panel-card" style={{ maxWidth: '720px' }}>
-              <div className="panel-header">
-                <h3>Fund Trading Wallet (Deposit)</h3>
-                {depositStep === 'form' && (
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={() => setDepositStep('select')}
-                  >
-                    Change Network
-                  </button>
-                )}
-              </div>
-
-              {depositStep === 'select' ? (
-                <>
-                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
-                    Select a network to generate and reveal that network&apos;s deposit address:
-                  </p>
-
-                  <div className="features-grid" style={{ marginBottom: '18px' }}>
-                    {NETWORK_OPTIONS.map((net) => {
-                      const active = net.id === depositNetwork.id;
-                      return (
-                        <button
-                          key={net.id}
-                          type="button"
-                          onClick={() => setDepositNetworkId(net.id)}
-                          className="feature-card"
-                          style={{
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                            borderColor: active ? 'var(--accent-crimson)' : 'var(--border-subtle)',
-                            background: active ? 'rgba(225, 29, 72, 0.12)' : 'var(--bg-input)',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <CurrencyIcon code={net.id} size={22} />
-                            <strong>{net.id}</strong>
-                          </div>
-                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
-                            {net.label}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <button
-                    type="button"
-                    className="btn btn-crimson"
-                    style={{ width: '100%' }}
-                    onClick={() => setDepositStep('form')}
-                  >
-                    Continue with {depositNetwork.id}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div
-                    style={{
-                      background: 'var(--bg-input)',
-                      padding: '14px',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                      border: '1px solid var(--border-subtle)',
-                      marginBottom: '16px',
-                      wordBreak: 'break-all',
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        color: 'var(--text-secondary)',
-                        marginBottom: '6px',
-                      }}
-                    >
-                      <CurrencyIcon code={depositNetwork.id} size={18} />
-                      <span>
-                        <strong>{depositNetwork.label}</strong> Deposit Wallet Address:
-                      </span>
+            <div style={{ maxWidth: '820px' }}>
+              <div className="panel-card">
+                <div className="panel-header">
+                  <div>
+                    <h3>Deposit Funds</h3>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      Fund your account with crypto
                     </div>
-                    <strong className="tabular">{activeDepositAddress}</strong>
                   </div>
+                  <div className="tabular" style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                      AVAILABLE BALANCE
+                    </div>
+                    <strong>${balance.toFixed(2)}</strong>
+                  </div>
+                </div>
 
-                  <form onSubmit={handleDeposit}>
+                <div className="stepper-bar">
+                  <div className={`stepper-item ${depositStep === 'amount' ? 'active' : 'done'}`}>
+                    <span>1</span> Amount
+                  </div>
+                  <div className="stepper-line" />
+                  <div
+                    className={`stepper-item ${
+                      depositStep === 'payment'
+                        ? 'active'
+                        : depositStep === 'complete'
+                          ? 'done'
+                          : ''
+                    }`}
+                  >
+                    <span>2</span> Send Payment
+                  </div>
+                  <div className="stepper-line" />
+                  <div className={`stepper-item ${depositStep === 'complete' ? 'active' : ''}`}>
+                    <span>3</span> Complete
+                  </div>
+                </div>
+
+                {depositStep === 'amount' && (
+                  <form onSubmit={handleCreateDepositRequest}>
                     <div className="form-group">
-                      <label className="form-label">Deposit Amount (USD)</label>
+                      <label className="form-label">1 • Choose Wallet</label>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                        Select the currency and network you&apos;ll send from. Send only the selected asset on this network.
+                      </div>
+                      <div className="asset-choice-grid">
+                        {NETWORK_OPTIONS.map((net) => {
+                          const active = net.id === depositNetwork.id;
+                          return (
+                            <button
+                              key={net.id}
+                              type="button"
+                              onClick={() => setDepositNetworkId(net.id)}
+                              className={`asset-choice-card ${active ? 'active' : ''}`}
+                            >
+                              <CurrencyIcon code={net.id} size={24} />
+                              <div>
+                                <strong>{net.name}</strong>
+                                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                  {net.sublabel}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">2 • Enter Amount</label>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                        Minimum $10.00.
+                      </div>
                       <input
                         type="number"
                         className="form-control tabular"
-                        min="50"
+                        min="10"
+                        step="0.01"
                         value={depositAmt}
                         onChange={(e) => setDepositAmt(e.target.value)}
                         required
                       />
+                      <div className="preset-chip-row tabular">
+                        {DEPOSIT_PRESETS.map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            className={`preset-chip ${Number(depositAmt) === preset ? 'active' : ''}`}
+                            onClick={() => setDepositAmt(preset)}
+                          >
+                            ${preset.toLocaleString()}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
-                    <div className="form-group">
+                    <div className="summary-card tabular" style={{ marginBottom: '16px' }}>
+                      <div className="summary-row">
+                        <span>Wallet</span>
+                        <strong>{depositNetwork.id}</strong>
+                      </div>
+                      <div className="summary-row">
+                        <span>Amount (USD)</span>
+                        <strong>${parsedDepositAmt.toFixed(2)}</strong>
+                      </div>
+                      <div className="summary-row">
+                        <span>Credited to Balance</span>
+                        <strong style={{ color: 'var(--positive)' }}>
+                          ${parsedDepositAmt.toFixed(2)}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <button type="submit" className="btn btn-crimson" style={{ width: '100%' }}>
+                      Continue →
+                    </button>
+                  </form>
+                )}
+
+                {depositStep === 'payment' && (
+                  <div>
+                    <div style={{ textAlign: 'center', marginBottom: '18px' }}>
+                      <div style={{ display: 'inline-flex', justifyContent: 'center', marginBottom: '8px' }}>
+                        <CurrencyIcon code={depositNetwork.id} size={36} />
+                      </div>
+                      <h4>Send Your {depositNetwork.id}</h4>
+                      <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
+                        Send the exact USD equivalent in {depositNetwork.fullLabel} to this address
+                      </p>
+                    </div>
+
+                    <div className="wallet-address-box">
+                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                        {depositNetwork.fullLabel.toUpperCase()} ADDRESS
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+                        <code className="tabular" style={{ wordBreak: 'break-all', fontSize: '12.5px' }}>
+                          {activeDepositAddress}
+                        </code>
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          onClick={handleCopyDepositAddress}
+                        >
+                          {copiedWallet ? <Check size={14} /> : <Copy size={14} />}
+                          {copiedWallet ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="form-group" style={{ marginTop: '14px' }}>
                       <label className="form-label">Transaction Hash / TXID (Optional)</label>
                       <input
                         type="text"
                         className="form-control"
-                        placeholder="Paste blockchain TXID for faster credit..."
+                        placeholder="Paste transaction hash after sending..."
                         value={depositTxHash}
                         onChange={(e) => setDepositTxHash(e.target.value)}
                       />
                     </div>
 
-                    <button type="submit" className="btn btn-crimson" style={{ width: '100%' }}>
-                      Confirm &amp; Log {depositNetwork.id} Deposit Notice
+                    <div className="summary-card tabular" style={{ marginBottom: '16px' }}>
+                      <div className="summary-row">
+                        <span>Deposit amount</span>
+                        <strong>${parsedDepositAmt.toFixed(2)}</strong>
+                      </div>
+                      <div className="summary-row">
+                        <span>Network fee</span>
+                        <span>$0.00</span>
+                      </div>
+                      <div className="summary-row">
+                        <span>Total to send</span>
+                        <strong>${parsedDepositAmt.toFixed(2)}</strong>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        onClick={() => setDepositStep('amount')}
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-crimson"
+                        style={{ flex: 1 }}
+                        onClick={handleConfirmDepositSent}
+                      >
+                        ✓ I Have Sent the Payment
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {depositStep === 'complete' && (
+                  <div style={{ textAlign: 'center', padding: '14px 0' }}>
+                    <CheckCircle2 size={36} color="#10B981" style={{ marginBottom: '10px' }} />
+                    <h4>Deposit Submitted</h4>
+                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '8px 0 18px' }}>
+                      Your ${parsedDepositAmt.toFixed(2)} ({depositNetwork.id}) deposit request is now Pending confirmation.
+                    </p>
+                    <button
+                      type="button"
+                      className="btn btn-white"
+                      onClick={() => setDepositStep('amount')}
+                    >
+                      New Deposit
                     </button>
-                  </form>
-                </>
-              )}
+                  </div>
+                )}
+              </div>
+
+              <div className="panel-card">
+                <div className="panel-header">
+                  <h3>Recent Deposits</h3>
+                </div>
+                <div className="data-table-wrap">
+                  <table className="data-table tabular">
+                    <thead>
+                      <tr>
+                        <th>Amount</th>
+                        <th>Method</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentDeposits.length === 0 ? (
+                        <tr>
+                          <td colSpan="4" style={{ color: 'var(--text-muted)' }}>
+                            No deposits recorded yet.
+                          </td>
+                        </tr>
+                      ) : (
+                        recentDeposits.map((tx) => (
+                          <tr key={tx.id}>
+                            <td>${Number(tx.amount).toFixed(2)}</td>
+                            <td>{tx.network || tx.type}</td>
+                            <td>{new Date(tx.created_at).toLocaleString()}</td>
+                            <td>{tx.status.toUpperCase()}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 
           {activeTab === 'withdraw' && (
-            <div className="panel-card" style={{ maxWidth: '720px' }}>
-              <div className="panel-header">
-                <h3>Outbound Crypto Withdrawal</h3>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  {withdrawStep === 'form' && (
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      onClick={() => setWithdrawStep('select')}
-                    >
-                      Change Network
-                    </button>
-                  )}
-                  <span className={`kyc-pill ${kycStatus}`} style={{ marginBottom: 0 }}>
-                    KYC: {kycStatus.toUpperCase()}
-                  </span>
-                </div>
-              </div>
-
-              {withdrawStep === 'select' ? (
-                <>
-                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
-                    Choose a network first to unlock withdrawal wallet entry (automatic 10% gas fee applies):
-                  </p>
-
-                  <div className="features-grid" style={{ marginBottom: '18px' }}>
-                    {NETWORK_OPTIONS.map((net) => {
-                      const active = net.id === withdrawNetwork.id;
-                      return (
-                        <button
-                          key={net.id}
-                          type="button"
-                          onClick={() => setWithdrawNetworkId(net.id)}
-                          className="feature-card"
-                          style={{
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                            borderColor: active ? 'var(--accent-crimson)' : 'var(--border-subtle)',
-                            background: active ? 'rgba(225, 29, 72, 0.12)' : 'var(--bg-input)',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <CurrencyIcon code={net.id} size={22} />
-                            <strong>{net.id}</strong>
-                          </div>
-                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
-                            {net.label}
-                          </div>
-                        </button>
-                      );
-                    })}
+            <div style={{ maxWidth: '820px' }}>
+              <div className="panel-card">
+                <div className="panel-header">
+                  <div>
+                    <h3>Withdraw Funds</h3>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      Withdraw to any external wallet • 10% automatic gas fee applies
+                    </div>
                   </div>
+                  <div className="tabular" style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                      AVAILABLE BALANCE
+                    </div>
+                    <strong>${balance.toFixed(2)}</strong>
+                  </div>
+                </div>
 
-                  <button
-                    type="button"
-                    className="btn btn-white"
-                    style={{ width: '100%' }}
-                    onClick={() => setWithdrawStep('form')}
-                  >
-                    Continue with {withdrawNetwork.id}
-                  </button>
-                </>
-              ) : (
+                {withdrawError && (
+                  <div className="auth-alert error" style={{ marginBottom: '16px' }}>
+                    {withdrawError}
+                  </div>
+                )}
+
                 <form onSubmit={handleWithdraw}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      marginBottom: '14px',
-                      fontSize: '13px',
-                      color: 'var(--text-secondary)',
-                    }}
-                  >
-                    <CurrencyIcon code={withdrawNetwork.id} size={20} />
-                    <span>
-                      Selected Network: <strong style={{ color: 'var(--surface-white)' }}>{withdrawNetwork.label}</strong>
-                    </span>
+                  <div className="form-group">
+                    <label className="form-label">1 • Choose Payout Method</label>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                      Select the network you&apos;ll receive funds on. Double-check the address — crypto sends are irreversible.
+                    </div>
+                    <div className="asset-choice-grid">
+                      {NETWORK_OPTIONS.map((net) => {
+                        const active = net.id === withdrawNetwork.id;
+                        return (
+                          <button
+                            key={net.id}
+                            type="button"
+                            onClick={() => {
+                              setWithdrawNetworkId(net.id);
+                              setWithdrawError('');
+                            }}
+                            className={`asset-choice-card ${active ? 'active' : ''}`}
+                          >
+                            <CurrencyIcon code={net.id} size={24} />
+                            <div>
+                              <strong>{net.name}</strong>
+                              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                {net.sublabel}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Withdrawal Amount (USD)</label>
+                    <label className="form-label">2 • Amount &amp; Wallet</label>
                     <input
                       type="number"
                       className="form-control tabular"
-                      min="20"
+                      min="10"
+                      step="0.01"
                       value={withdrawAmt}
                       onChange={(e) => setWithdrawAmt(e.target.value)}
                       required
                     />
+                    <div className="preset-chip-row tabular">
+                      {WITHDRAW_PRESETS.map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          className={`preset-chip ${Number(withdrawAmt) === preset ? 'active' : ''}`}
+                          onClick={() => setWithdrawAmt(preset)}
+                        >
+                          ${preset.toLocaleString()}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">
-                      Destination {withdrawNetwork.id} Wallet Address
-                    </label>
+                    <label className="form-label">Your Receiving Wallet Address</label>
                     <input
                       type="text"
                       className="form-control"
-                      placeholder={`Enter your ${withdrawNetwork.id} wallet address`}
+                      placeholder="Paste your receiving address"
                       value={withdrawWallet}
                       onChange={(e) => setWithdrawWallet(e.target.value)}
                       required
                     />
+                    <div style={{ fontSize: '11.5px', color: '#FBBF24', marginTop: '6px' }}>
+                      Verify the address carefully — crypto transfers cannot be reversed.
+                    </div>
                   </div>
 
                   <div className="form-group">
@@ -1227,26 +1492,126 @@ export default function Dashboard({ session }) {
                     />
                   </div>
 
-                  <div className="gas-summary-box tabular">
-                    <div>
-                      <span>Net Payout Sent to Wallet:</span>
+                  <div className="summary-card tabular" style={{ marginBottom: '16px' }}>
+                    <div className="summary-row">
+                      <span>Method</span>
+                      <strong>{withdrawNetwork.id}</strong>
+                    </div>
+                    <div className="summary-row">
+                      <span>Amount</span>
                       <strong>${parsedWithdrawAmt.toFixed(2)}</strong>
                     </div>
-                    <div>
-                      <span>Automatic Gas Fee (10%):</span>
-                      <span style={{ color: '#fda4af' }}>+${withdrawGasFee.toFixed(2)}</span>
+                    <div className="summary-row">
+                      <span>Gas Fee (10%)</span>
+                      <strong style={{ color: '#fda4af' }}>+${withdrawGasFee.toFixed(2)}</strong>
                     </div>
-                    <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '8px' }}>
-                      <span>Total Deducted from Balance:</span>
+                    <div className="summary-row">
+                      <span>Balance Deducted</span>
                       <strong>${netWithdrawTotal.toFixed(2)}</strong>
+                    </div>
+                    <div className="summary-row">
+                      <span>You Receive</span>
+                      <strong style={{ color: 'var(--positive)' }}>
+                        ${parsedWithdrawAmt.toFixed(2)}
+                      </strong>
                     </div>
                   </div>
 
-                  <button type="submit" className="btn btn-white" style={{ width: '100%' }}>
-                    Verify PIN &amp; Submit {withdrawNetwork.id} Withdrawal
+                  <button type="submit" className="btn btn-crimson" style={{ width: '100%' }}>
+                    Continue
                   </button>
                 </form>
-              )}
+              </div>
+
+              <div className="panel-card">
+                <div className="panel-header">
+                  <h3>Recent Withdrawals</h3>
+                </div>
+                <div className="data-table-wrap">
+                  <table className="data-table tabular">
+                    <thead>
+                      <tr>
+                        <th>Amount</th>
+                        <th>Gas Fee</th>
+                        <th>Method</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentWithdrawals.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" style={{ color: 'var(--text-muted)' }}>
+                            No withdrawals recorded yet.
+                          </td>
+                        </tr>
+                      ) : (
+                        recentWithdrawals.map((tx) => (
+                          <tr key={tx.id}>
+                            <td>${Math.abs(Number(tx.amount)).toFixed(2)}</td>
+                            <td>${Number(tx.gas_fee || 0).toFixed(2)}</td>
+                            <td>{tx.network || tx.type}</td>
+                            <td>{new Date(tx.created_at).toLocaleString()}</td>
+                            <td>{tx.status.toUpperCase()}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'history' && (
+            <div className="panel-card">
+              <div className="panel-header">
+                <h3>Full Transaction &amp; Gas History</h3>
+              </div>
+              <div className="data-table-wrap">
+                <table className="data-table tabular">
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Amount</th>
+                      <th>Gas Fee</th>
+                      <th>Address / TXID</th>
+                      <th>Status</th>
+                      <th>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactions.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" style={{ color: 'var(--text-muted)' }}>
+                          No transactions recorded yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      transactions.map((tx) => (
+                        <tr key={tx.id}>
+                          <td>{tx.type}</td>
+                          <td
+                            style={{
+                              color:
+                                Number(tx.amount) >= 0
+                                  ? 'var(--positive)'
+                                  : 'var(--text-primary)',
+                            }}
+                          >
+                            {Number(tx.amount) >= 0 ? '+' : ''}$
+                            {Math.abs(Number(tx.amount)).toFixed(2)}
+                          </td>
+                          <td>${Number(tx.gas_fee || 0).toFixed(2)}</td>
+                          <td style={{ fontSize: '12px' }}>{tx.wallet_address || '—'}</td>
+                          <td>{tx.status.toUpperCase()}</td>
+                          <td>{new Date(tx.created_at).toLocaleString()}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
@@ -1345,6 +1710,52 @@ export default function Dashboard({ session }) {
             </div>
           )}
 
+          {activeTab === 'support' && (
+            <div className="panel-card" style={{ maxWidth: '680px' }}>
+              <div className="panel-header">
+                <h3>Client Support Desk</h3>
+                <span className="plan-badge" style={{ marginBottom: 0 }}>
+                  24/7 Support
+                </span>
+              </div>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                Contact us at <strong style={{ color: 'var(--surface-white)' }}>support@equivaultfx.com</strong> for deposit confirmation, withdrawal PIN reset, or KYC assistance.
+              </p>
+
+              <form onSubmit={handleSupportSubmit}>
+                <div className="form-group">
+                  <label className="form-label">Topic</label>
+                  <select
+                    className="form-control"
+                    value={supportSubject}
+                    onChange={(e) => setSupportSubject(e.target.value)}
+                  >
+                    <option>Deposit &amp; Settlement</option>
+                    <option>Withdrawal &amp; 10% Gas Fee</option>
+                    <option>KYC &amp; Account Security</option>
+                    <option>Order Execution &amp; Chart</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Message</label>
+                  <textarea
+                    rows={4}
+                    className="form-control"
+                    placeholder="Describe your question or include your TXID..."
+                    value={supportMessage}
+                    onChange={(e) => setSupportMessage(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <button type="submit" className="btn btn-crimson">
+                  <Send size={15} /> Send to Support
+                </button>
+              </form>
+            </div>
+          )}
+
           {activeTab === 'admin' && isAdmin && (
             <>
               <div className="panel-card">
@@ -1360,7 +1771,7 @@ export default function Dashboard({ session }) {
                         style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                       >
                         <CurrencyIcon code={net.id} size={16} />
-                        <span>{net.label} Custody Address</span>
+                        <span>{net.fullLabel} Custody Address</span>
                       </label>
                       <input
                         type="text"
@@ -1542,6 +1953,26 @@ export default function Dashboard({ session }) {
               </div>
             </>
           )}
+
+          <footer className="dash-legal-footer">
+            <p>
+              <strong>Risk Warning:</strong> Trading leveraged derivatives, Forex, and digital assets carries a high level of risk to your capital and may not be suitable for all traders. Only trade with funds you can afford to lose.
+            </p>
+            <p>
+              <strong>Support &amp; Jurisdiction Notice:</strong> Contact{' '}
+              <button
+                type="button"
+                className="auth-inline-btn"
+                onClick={() => selectTab('support')}
+              >
+                Client Support
+              </button>{' '}
+              (support@equivaultfx.com) for assistance. Services are restricted in jurisdictions where online leveraged trading is prohibited by local law.
+            </p>
+            <div className="dash-copyright">
+              Copyright © 2026 EquivaultFX — All Rights Reserved.
+            </div>
+          </footer>
         </main>
       </div>
     </div>

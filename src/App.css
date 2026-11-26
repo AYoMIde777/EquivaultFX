@@ -182,3 +182,125 @@
     border-right-color: var(--border);
   }
 }
+
+/* Spacious Trade Workspace */
+.trade-focus-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.trade-chart-card {
+  padding: 16px;
+}
+
+.trade-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.trade-pair-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mode-switcher-bar {
+  display: inline-flex;
+  background: var(--bg-input, #141418);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle, #27272A);
+  gap: 4px;
+}
+
+.mode-switch-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #A1A1AA);
+  font-weight: 600;
+  font-size: 12.5px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.mode-switch-btn.active {
+  background: var(--accent-crimson, #991B1B);
+  color: #FFFFFF;
+}
+
+.trade-dock-card {
+  padding: 16px 20px;
+}
+
+.dock-inline-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.dock-field {
+  flex: 1;
+  min-width: 160px;
+}
+
+.dock-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* Stepper & Asset Cards (Deposit / Withdraw) */
+.stepper-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.stepper-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary, #A1A1AA);
+}
+
+.stepper-item span {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-subtle, #27272A);
+  font-size: 12px;
+}
+
+.stepper-item.active,
+.stepper-item.done {
+  color: #FFFFFF;
+}
+
+.stepper-item.active span {
+  background: var(--accent-crimson, #991B1B);
+  border-color: var(--accent-crimson, #991B1B);
+}
+
+.stepper-item.done span {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: #10B981;
+  color: #6EE7B7;
+}
+
+.stepper-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle, #27272A);
+}
