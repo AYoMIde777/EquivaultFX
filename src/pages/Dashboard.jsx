@@ -78,6 +78,7 @@ const NETWORK_OPTIONS = [
 
 const DEPOSIT_PRESETS = [50, 100, 500, 1000, 5000];
 const WITHDRAW_PRESETS = [100, 500, 1000, 2500, 5000];
+const DEPOSIT_GAS_RATE = 0.05;
 const WITHDRAWAL_GAS_RATE = 0.1;
 
 export default function Dashboard({ session }) {
@@ -128,6 +129,8 @@ export default function Dashboard({ session }) {
   const [idFile, setIdFile] = useState(null);
   const [selfieFile, setSelfieFile] = useState(null);
   const [profileNameInput, setProfileNameInput] = useState('');
+  const [usernameInput, setUsernameInput] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
   const [pinInput, setPinInput] = useState('');
   const [supportSubject, setSupportSubject] = useState('Deposit & Settlement');
   const [supportMessage, setSupportMessage] = useState('');
@@ -160,7 +163,17 @@ export default function Dashboard({ session }) {
     if (prof) {
       setProfile(prof);
       setProfileNameInput(prof.full_name || '');
+      setUsernameInput(
+        prof.username ||
+          session.user.user_metadata?.username ||
+          (session.user.email ? session.user.email.split('@')[0] : '')
+      );
       setPinInput(prof.withdrawal_pin || '');
+    } else {
+      setUsernameInput(
+        session.user.user_metadata?.username ||
+          (session.user.email ? session.user.email.split('@')[0] : '')
+      );
     }
 
     const { data: userTrades } = await supabase
@@ -243,6 +256,8 @@ export default function Dashboard({ session }) {
   const activeDepositAddress =
     walletsByNetwork[depositNetwork.id] || depositNetwork.defaultWallet;
   const parsedDepositAmt = Math.max(0, Number(depositAmt) || 0);
+  const depositGasFee = Number((parsedDepositAmt * DEPOSIT_GAS_RATE).toFixed(2));
+  const totalDepositWithFee = Number((parsedDepositAmt + depositGasFee).toFixed(2));
 
   const withdrawNetwork =
     NETWORK_OPTIONS.find((n) => n.id === withdrawNetworkId) || NETWORK_OPTIONS[0];
@@ -342,11 +357,14 @@ export default function Dashboard({ session }) {
   };
 
   const handleConfirmDepositSent = async () => {
+    const { data: authData } = await supabase.auth.getUser();
+    const activeUserId = authData?.user?.id || userId;
+
     const { error } = await supabase.from('transactions').insert({
-      user_id: userId,
-      type: `Deposit (${depositNetwork.id})`,
+      user_id: activeUserId,
+      type: `Deposit (${depositNetwork.id}) • 5% Gas`,
       amount: parsedDepositAmt,
-      gas_fee: 0,
+      gas_fee: depositGasFee,
       network: depositNetwork.id,
       wallet_address: depositTxHash.trim() || activeDepositAddress,
       status: 'Pending',
@@ -421,10 +439,17 @@ export default function Dashboard({ session }) {
       return;
     }
 
+    const cleanUsername = usernameInput.trim();
+    if (newPasswordInput && newPasswordInput.length < 6) {
+      showNotice('New password must be at least 6 characters.');
+      return;
+    }
+
     const { error } = await supabase
       .from('profiles')
       .update({
         full_name: profileNameInput.trim(),
+        username: cleanUsername || null,
         withdrawal_pin: cleanPin || null,
       })
       .eq('id', userId);
@@ -434,7 +459,22 @@ export default function Dashboard({ session }) {
       return;
     }
 
-    showNotice('Profile and withdrawal security PIN saved.');
+    await supabase.auth.updateUser({
+      data: { username: cleanUsername || null },
+    });
+
+    if (newPasswordInput) {
+      const { error: pwErr } = await supabase.auth.updateUser({
+        password: newPasswordInput,
+      });
+      if (pwErr) {
+        showNotice(pwErr.message);
+        return;
+      }
+      setNewPasswordInput('');
+    }
+
+    showNotice('Profile, username, security PIN, and credentials saved.');
     await loadUserData();
   };
 
@@ -726,7 +766,7 @@ export default function Dashboard({ session }) {
             </button>
             <div>
               <strong style={{ fontSize: '15px' }}>
-                {profile?.full_name || session.user.email}
+                {usernameInput || profile?.full_name || session.user.email}
               </strong>
               <div className="tabular" style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                 AVAILABLE BALANCE: ${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -778,7 +818,7 @@ export default function Dashboard({ session }) {
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '12px', alignItems: 'center' }}>
                   <div>
                     <h3 style={{ marginBottom: '4px' }}>
-                      Welcome, {profile?.full_name || 'Trader'}
+                      Welcome, {usernameInput || profile?.full_name || 'Trader'}
                     </h3>
                     <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
                       Live Market Session • {new Date().toUTCString().slice(17, 25)} UTC
@@ -821,8 +861,8 @@ export default function Dashboard({ session }) {
                   </div>
                 </div>
                 <div className="kpi-card">
-                  <div className="kpi-label">Withdrawal Gas</div>
-                  <div className="kpi-value">10% Auto</div>
+                  <div className="kpi-label">Deposit / Withdraw Gas</div>
+                  <div className="kpi-value">5% / 10%</div>
                 </div>
               </div>
 
@@ -899,7 +939,7 @@ export default function Dashboard({ session }) {
                 >
                   <strong>
                     {ticketMode === 'trade' && `Order Ticket — ${selectedSymbol.label}`}
-                    {ticketMode === 'deposit' && `Quick Deposit (${depositNetwork.id})`}
+                    {ticketMode === 'deposit' && `Quick Deposit (${depositNetwork.id} • 5% Gas)`}
                     {ticketMode === 'withdraw' && `Quick Withdraw (${withdrawNetwork.id} • 10% Gas)`}
                   </strong>
 
@@ -988,7 +1028,7 @@ export default function Dashboard({ session }) {
                   <div className="dock-inline-row" style={{ justifyContent: 'space-between' }}>
                     <div>
                       <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                        Choose wallet, enter USD amount, copy deposit address, and submit confirmation in the full Deposit view.
+                        Deposits include a 5% gas fee calculation (${depositGasFee.toFixed(2)} on ${parsedDepositAmt.toFixed(2)}).
                       </div>
                     </div>
                     <button
@@ -1140,7 +1180,7 @@ export default function Dashboard({ session }) {
                   <div>
                     <h3>Deposit Funds</h3>
                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      Fund your account directly with crypto
+                      5% gas fee applies on deposits
                     </div>
                   </div>
                   <div className="tabular" style={{ textAlign: 'right' }}>
@@ -1206,7 +1246,7 @@ export default function Dashboard({ session }) {
                     <div className="form-group">
                       <label className="form-label">2 • Enter Amount</label>
                       <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                        Minimum $10.00.
+                        Minimum $10.00. A 5% deposit gas fee is calculated automatically.
                       </div>
                       <input
                         type="number"
@@ -1241,6 +1281,14 @@ export default function Dashboard({ session }) {
                         <strong>${parsedDepositAmt.toFixed(2)}</strong>
                       </div>
                       <div className="summary-row">
+                        <span>Gas Fee (5%)</span>
+                        <strong style={{ color: '#fda4af' }}>+${depositGasFee.toFixed(2)}</strong>
+                      </div>
+                      <div className="summary-row">
+                        <span>Total with 5% Gas Fee</span>
+                        <strong>${totalDepositWithFee.toFixed(2)}</strong>
+                      </div>
+                      <div className="summary-row">
                         <span>Credited to Balance</span>
                         <strong style={{ color: 'var(--positive)' }}>
                           ${parsedDepositAmt.toFixed(2)}
@@ -1262,7 +1310,7 @@ export default function Dashboard({ session }) {
                       </div>
                       <h4>Send Your {depositNetwork.id}</h4>
                       <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
-                        Send the exact USD equivalent in {depositNetwork.fullLabel} to this address
+                        Send ${totalDepositWithFee.toFixed(2)} equivalent (${parsedDepositAmt.toFixed(2)} deposit + ${depositGasFee.toFixed(2)} 5% gas fee) in {depositNetwork.fullLabel} to this address
                       </p>
                     </div>
 
@@ -1302,8 +1350,12 @@ export default function Dashboard({ session }) {
                         <strong>${parsedDepositAmt.toFixed(2)}</strong>
                       </div>
                       <div className="summary-row">
+                        <span>Gas fee (5%)</span>
+                        <strong style={{ color: '#fda4af' }}>+${depositGasFee.toFixed(2)}</strong>
+                      </div>
+                      <div className="summary-row">
                         <span>Total to send</span>
-                        <strong>${parsedDepositAmt.toFixed(2)}</strong>
+                        <strong>${totalDepositWithFee.toFixed(2)}</strong>
                       </div>
                     </div>
 
@@ -1332,7 +1384,7 @@ export default function Dashboard({ session }) {
                     <CheckCircle2 size={36} color="#10B981" style={{ marginBottom: '10px' }} />
                     <h4>Deposit Submitted</h4>
                     <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '8px 0 18px' }}>
-                      Your ${parsedDepositAmt.toFixed(2)} ({depositNetwork.id}) deposit request is now Pending confirmation.
+                      Your ${parsedDepositAmt.toFixed(2)} ({depositNetwork.id}) deposit request with ${depositGasFee.toFixed(2)} (5% gas fee) is now Pending confirmation.
                     </p>
                     <button
                       type="button"
@@ -1354,6 +1406,7 @@ export default function Dashboard({ session }) {
                     <thead>
                       <tr>
                         <th>Amount</th>
+                        <th>5% Gas Fee</th>
                         <th>Method</th>
                         <th>Date</th>
                         <th>Status</th>
@@ -1362,7 +1415,7 @@ export default function Dashboard({ session }) {
                     <tbody>
                       {recentDeposits.length === 0 ? (
                         <tr>
-                          <td colSpan="4" style={{ color: 'var(--text-muted)' }}>
+                          <td colSpan="5" style={{ color: 'var(--text-muted)' }}>
                             No deposits recorded yet.
                           </td>
                         </tr>
@@ -1370,6 +1423,7 @@ export default function Dashboard({ session }) {
                         recentDeposits.map((tx) => (
                           <tr key={tx.id}>
                             <td>${Number(tx.amount).toFixed(2)}</td>
+                            <td>${Number(tx.gas_fee || 0).toFixed(2)}</td>
                             <td>{tx.network || tx.type}</td>
                             <td>{new Date(tx.created_at).toLocaleString()}</td>
                             <td>{tx.status.toUpperCase()}</td>
@@ -1674,6 +1728,16 @@ export default function Dashboard({ session }) {
             <div className="panel-card" style={{ maxWidth: '540px' }}>
               <h3 style={{ marginBottom: '14px' }}>Account Profile &amp; Withdrawal PIN</h3>
               <div className="form-group">
+                <label className="form-label">Username</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Enter username"
+                  value={usernameInput}
+                  onChange={(e) => setUsernameInput(e.target.value)}
+                />
+              </div>
+              <div className="form-group">
                 <label className="form-label">Full Name</label>
                 <input
                   type="text"
@@ -1689,6 +1753,16 @@ export default function Dashboard({ session }) {
                   className="form-control"
                   value={session.user.email}
                   disabled
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Password (Set or Update)</label>
+                <input
+                  type="password"
+                  className="form-control"
+                  placeholder="•••••••• (enter new password to change)"
+                  value={newPasswordInput}
+                  onChange={(e) => setNewPasswordInput(e.target.value)}
                 />
               </div>
               <div className="form-group">
@@ -1822,7 +1896,7 @@ export default function Dashboard({ session }) {
                       {allProfiles.map((p) => (
                         <tr key={p.id}>
                           <td>
-                            <strong>{p.full_name || 'Trader'}</strong>
+                            <strong>{p.full_name || p.username || 'Trader'}</strong>
                             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                               {p.email}
                             </div>

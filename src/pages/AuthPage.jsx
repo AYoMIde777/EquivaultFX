@@ -1,363 +1,217 @@
-import React, { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ShieldCheck, Eye, EyeOff, Check, X } from "lucide-react";
-import efxLogo from "../assets/EFX logo.jpg";
-import { supabase } from "../lib/supabase";
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, KeyRound, Mail, Lock } from 'lucide-react';
+import BrandLogo from '../components/BrandLogo';
+import { supabase } from '../lib/supabase';
 
-const COUNTRIES = [
-  "United Arab Emirates",
-  "United Kingdom",
-  "United States",
-  "South Africa",
-  "Canada",
-  "Germany",
-  "Singapore",
-];
-
-export default function AuthPage() {
-  const [searchParams] = useSearchParams();
-  const initialMode =
-    searchParams.get("mode") === "signup" ? "signup" : "login";
-  const [mode, setMode] = useState(initialMode); // "login" | "signup" | "forgot" | "recovery"
-
-  const [fullName, setFullName] = useState("");
-  const [username, setUsername] = useState("");
-  const [country, setCountry] = useState("Nigeria");
-  const [phone, setPhone] = useState("");
-  const [accountCurrency, setAccountCurrency] = useState("USD");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [agreedTerms, setAgreedTerms] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [infoMsg, setInfoMsg] = useState("");
-  const [logoError, setLogoError] = useState(false);
+export default function AuthPage({ session }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialMode = searchParams.get('mode') === 'signup' ? 'signup' : 'login';
+
+  // modes: 'login' | 'signup' | 'forgot' | 'recovery'
+  const [mode, setMode] = useState(initialMode);
+  const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [alert, setAlert] = useState({ type: '', text: '' });
 
   useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
-        setMode("recovery");
-        setErrorMsg("");
-        setInfoMsg("Enter your new password below to complete recovery.");
+    const hash = window.location.hash || '';
+    if (hash.includes('type=recovery')) {
+      setMode('recovery');
+    }
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setMode('recovery');
       }
     });
 
     return () => {
-      authListener?.subscription?.unsubscribe();
+      listener?.subscription?.unsubscribe();
     };
   }, []);
 
-  const checks = {
-    length: password.length >= 8,
-    upper: /[A-Z]/.test(password),
-    number: /[0-9]/.test(password),
-    special: /[^A-Za-z0-9]/.test(password),
-  };
-  const strengthScore = Object.values(checks).filter(Boolean).length;
+  useEffect(() => {
+    if (session && mode !== 'recovery') {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [session, mode, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setErrorMsg("");
-    setInfoMsg("");
+    setAlert({ type: '', text: '' });
+    setLoading(true);
 
-    if (mode === "forgot") {
-      const cleanEmail = email.trim();
-      if (!cleanEmail) {
-        setErrorMsg("Enter the email address linked to your account.");
-        return;
-      }
-
-      setLoading(true);
-      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: `${window.location.origin}/auth?reset=1`,
-      });
-      setLoading(false);
-
-      if (error) {
-        setErrorMsg(error.message);
-        return;
-      }
-      setInfoMsg(
-        "Password reset instructions sent. Check your inbox and spam folder."
-      );
-      return;
-    }
-
-    if (mode === "recovery") {
-      if (password.length < 6) {
-        setErrorMsg("New password must be at least 6 characters.");
-        return;
-      }
-      if (password !== confirmPassword) {
-        setErrorMsg("Passwords do not match.");
-        return;
-      }
-
-      setLoading(true);
-      const { error } = await supabase.auth.updateUser({ password });
-      setLoading(false);
-
-      if (error) {
-        setErrorMsg(error.message);
-        return;
-      }
-      setInfoMsg("Password updated. Redirecting to trading terminal...");
-      setTimeout(() => navigate("/dashboard"), 1000);
-      return;
-    }
-
-    if (mode === "signup") {
-      if (strengthScore < 3) {
-        setErrorMsg(
-          "Use at least 8 characters including uppercase, number, and symbol."
-        );
-        return;
-      }
-      if (password !== confirmPassword) {
-        setErrorMsg("Passwords do not match.");
-        return;
-      }
-      if (!agreedTerms) {
-        setErrorMsg("Please accept the Risk Disclosure and Client Agreement.");
-        return;
-      }
-
-      setLoading(true);
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          data: {
-            full_name: fullName.trim(),
-            username: username.trim().toLowerCase(),
-            country,
-            phone: phone.trim(),
-            account_currency: accountCurrency,
+    try {
+      if (mode === 'forgot') {
+        const redirectTo = `${window.location.origin}/auth`;
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo,
+        });
+        if (error) throw error;
+        setAlert({
+          type: 'success',
+          text: 'Password reset link sent to your email. Open the link to set a new password.',
+        });
+      } else if (mode === 'recovery') {
+        if (password.length < 6) {
+          throw new Error('New password must be at least 6 characters.');
+        }
+        if (password !== confirmPassword) {
+          throw new Error('Passwords do not match.');
+        }
+        const { error } = await supabase.auth.updateUser({ password });
+        if (error) throw error;
+        setPassword('');
+        setConfirmPassword('');
+        setAlert({
+          type: 'success',
+          text: 'Password updated successfully. Redirecting to your dashboard...',
+        });
+        setTimeout(() => navigate('/dashboard', { replace: true }), 1200);
+      } else if (mode === 'signup') {
+        const cleanUsername =
+          username.trim() || (email.includes('@') ? email.split('@')[0] : '');
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: {
+              full_name: fullName.trim(),
+              username: cleanUsername,
+            },
           },
-        },
-      });
-      setLoading(false);
+        });
+        if (error) throw error;
 
-      if (error) {
-        setErrorMsg(error.message);
-        return;
-      }
-      if (data.session) {
-        navigate("/dashboard");
+        if (data?.user?.id) {
+          await supabase
+            .from('profiles')
+            .upsert(
+              {
+                id: data.user.id,
+                email: email.trim(),
+                full_name: fullName.trim(),
+                username: cleanUsername || null,
+              },
+              { onConflict: 'id' }
+            );
+        }
+
+        setAlert({
+          type: 'success',
+          text: 'Account created! Check your inbox if email confirmation is required, or log in.',
+        });
       } else {
-        setInfoMsg("Account registered. Verify your email link, then sign in.");
-        setMode("login");
+        const { error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+        if (error) throw error;
+        navigate('/dashboard', { replace: true });
       }
-    } else {
-      setLoading(true);
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
+    } catch (err) {
+      setAlert({ type: 'error', text: err.message || 'Authentication failed.' });
+    } finally {
       setLoading(false);
-
-      if (error) {
-        setErrorMsg(error.message);
-        return;
-      }
-      navigate("/dashboard");
     }
   };
 
   return (
-    <div
-      className="auth-page"
-      style={{
-        minHeight: "100vh",
-        width: "100%",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "24px 16px",
-        boxSizing: "border-box",
-      }}
-    >
-      <div
-        className="auth-card"
-        style={{
-          width: "100%",
-          maxWidth: mode === "signup" ? "520px" : "430px",
-          margin: "0 auto",
-          boxSizing: "border-box",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Link to="/" className="brand-mark">
-            {!logoError ? (
-              <img
-                src={efxLogo}
-                alt="EquivaultFX"
-                className="brand-logo-img"
-                onError={() => setLogoError(true)}
-              />
-            ) : (
-              <span className="brand-logo-fallback">EF</span>
-            )}
-            <span>
-              Equivault<span className="brand-accent">FX</span>
-            </span>
-          </Link>
-
-          <Link
-            to="/"
-            style={{
-              fontSize: "13px",
-              color: "var(--text-secondary)",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-            }}
-          >
-            <ArrowLeft size={14} /> Home
+    <div className="auth-shell">
+      <div className="auth-card">
+        <div style={{ marginBottom: '18px' }}>
+          <Link to="/" className="auth-back-link">
+            <ArrowLeft size={15} /> Back to Home
           </Link>
         </div>
 
-        {(mode === "login" || mode === "signup") && (
-          <div className="auth-tabs">
-            <button
-              type="button"
-              className={`auth-tab ${mode === "login" ? "active" : ""}`}
-              onClick={() => {
-                setMode("login");
-                setErrorMsg("");
-              }}
-            >
-              Client Log In
-            </button>
-            <button
-              type="button"
-              className={`auth-tab ${mode === "signup" ? "active" : ""}`}
-              onClick={() => {
-                setMode("signup");
-                setErrorMsg("");
-              }}
-            >
-              Open Live Account
-            </button>
-          </div>
-        )}
+        <BrandLogo />
 
-        {mode === "forgot" && (
-          <div style={{ marginTop: "14px", marginBottom: "12px" }}>
-            <h3 style={{ fontSize: "18px", marginBottom: "4px" }}>
-              Forgot Password
-            </h3>
-            <p style={{ fontSize: "12.5px", color: "var(--text-secondary)" }}>
-              Enter your account email to receive a password reset link.
+        {mode === 'login' && (
+          <>
+            <h2 className="auth-title">Welcome Back</h2>
+            <p className="auth-sub">
+              Sign in to access your EquivaultFX trading terminal and wallets.
             </p>
-          </div>
+          </>
         )}
 
-        {mode === "recovery" && (
-          <div style={{ marginTop: "14px", marginBottom: "12px" }}>
-            <h3 style={{ fontSize: "18px", marginBottom: "4px" }}>
-              Set New Password
-            </h3>
-            <p style={{ fontSize: "12.5px", color: "var(--text-secondary)" }}>
-              Enter and confirm your new password below.
+        {mode === 'signup' && (
+          <>
+            <h2 className="auth-title">Create Trading Account</h2>
+            <p className="auth-sub">
+              Open your EquivaultFX account for live markets and liquidity tiers.
             </p>
-          </div>
+          </>
         )}
 
-        {errorMsg && <div className="auth-alert error">{errorMsg}</div>}
-        {infoMsg && <div className="auth-alert success">{infoMsg}</div>}
+        {mode === 'forgot' && (
+          <>
+            <h2 className="auth-title">Reset Your Password</h2>
+            <p className="auth-sub">
+              Enter your account email and we will send you a password recovery link.
+            </p>
+          </>
+        )}
+
+        {mode === 'recovery' && (
+          <>
+            <h2 className="auth-title">Set New Password</h2>
+            <p className="auth-sub">
+              Choose a new password for your EquivaultFX account.
+            </p>
+          </>
+        )}
+
+        {alert.text && (
+          <div className={`auth-alert ${alert.type === 'error' ? 'error' : 'success'}`}>
+            {alert.text}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
-          {mode === "signup" && (
+          {mode === 'signup' && (
             <>
-              <div className="auth-grid-2">
-                <div className="form-group">
-                  <label className="form-label">Full Legal Name</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Alex Mercer"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Trader Username</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="amercer_fx"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="auth-grid-2">
-                <div className="form-group">
-                  <label className="form-label">Country of Residence</label>
-                  <select
-                    className="form-control"
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                  >
-                    {COUNTRIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Phone Number</label>
-                  <input
-                    type="tel"
-                    className="form-control"
-                    placeholder="+1 000 000 0000"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
               <div className="form-group">
-                <label className="form-label">Base Account Currency</label>
-                <select
+                <label className="form-label">Full Name</label>
+                <input
+                  type="text"
                   className="form-control"
-                  value={accountCurrency}
-                  onChange={(e) => setAccountCurrency(e.target.value)}
-                >
-                  <option value="USD">USD — US Dollar</option>
-                  <option value="USDT">USDT — Tether Stablecoin</option>
-                  <option value="EUR">EUR — Euro</option>
-                  <option value="GBP">GBP — British Pound</option>
-                </select>
+                  placeholder="Enter your full name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Username</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Choose a username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
               </div>
             </>
           )}
 
-          {(mode === "login" || mode === "signup" || mode === "forgot") && (
+          {(mode === 'login' || mode === 'signup' || mode === 'forgot') && (
             <div className="form-group">
-              <label className="form-label">Email Address</label>
+              <label className="form-label">
+                <Mail size={13} style={{ marginRight: '5px', verticalAlign: '-2px' }} />
+                Email Address
+              </label>
               <input
                 type="email"
                 className="form-control"
-                placeholder="trader@equivaultfx.com"
+                placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -365,108 +219,33 @@ export default function AuthPage() {
             </div>
           )}
 
-          {(mode === "login" || mode === "signup" || mode === "recovery") && (
+          {(mode === 'login' || mode === 'signup' || mode === 'recovery') && (
             <div className="form-group">
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <label className="form-label">
-                  {mode === "recovery" ? "New Password" : "Password"}
-                </label>
-                {mode === "login" && (
-                  <button
-                    type="button"
-                    className="auth-inline-btn"
-                    onClick={() => {
-                      setErrorMsg("");
-                      setInfoMsg("");
-                      setMode("forgot");
-                    }}
-                  >
-                    Forgot Password?
-                  </button>
-                )}
-              </div>
-              <div style={{ position: "relative" }}>
-                <input
-                  type={showPassword ? "text" : "password"}
-                  className="form-control"
-                  placeholder="••••••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  style={{ paddingRight: "40px" }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  style={{
-                    position: "absolute",
-                    right: "12px",
-                    top: "55%",
-                    transform: "translateY(-50%)",
-                    background: "none",
-                    border: "none",
-                    color: "var(--text-secondary)",
-                    cursor: "pointer",
-                  }}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {mode === "signup" && (
-            <>
-              <div className="password-meter">
-                <div
-                  className={`meter-bar ${strengthScore >= 1 ? "active" : ""}`}
-                />
-                <div
-                  className={`meter-bar ${strengthScore >= 2 ? "active" : ""}`}
-                />
-                <div
-                  className={`meter-bar ${strengthScore >= 3 ? "active" : ""}`}
-                />
-                <div
-                  className={`meter-bar ${strengthScore >= 4 ? "active" : ""}`}
-                />
-              </div>
-
-              <div className="password-checklist">
-                <span>
-                  {checks.length ? <Check size={12} /> : <X size={12} />} 8+
-                  chars
-                </span>
-                <span>
-                  {checks.upper ? <Check size={12} /> : <X size={12} />}{" "}
-                  Uppercase
-                </span>
-                <span>
-                  {checks.number ? <Check size={12} /> : <X size={12} />} Number
-                </span>
-                <span>
-                  {checks.special ? <Check size={12} /> : <X size={12} />}{" "}
-                  Symbol
-                </span>
-              </div>
-            </>
-          )}
-
-          {(mode === "signup" || mode === "recovery") && (
-            <div className="form-group" style={{ marginTop: "12px" }}>
               <label className="form-label">
-                {mode === "recovery" ? "Confirm New Password" : "Confirm Password"}
+                <Lock size={13} style={{ marginRight: '5px', verticalAlign: '-2px' }} />
+                {mode === 'recovery' ? 'New Password' : 'Password'}
               </label>
               <input
                 type="password"
                 className="form-control"
-                placeholder="••••••••••••"
+                placeholder="Enter password (min 6 chars)"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+          )}
+
+          {mode === 'recovery' && (
+            <div className="form-group">
+              <label className="form-label">
+                <KeyRound size={13} style={{ marginRight: '5px', verticalAlign: '-2px' }} />
+                Confirm New Password
+              </label>
+              <input
+                type="password"
+                className="form-control"
+                placeholder="Confirm new password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
@@ -474,78 +253,88 @@ export default function AuthPage() {
             </div>
           )}
 
-          {mode === "signup" && (
-            <label
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: "8px",
-                fontSize: "12px",
-                color: "var(--text-secondary)",
-                marginBottom: "14px",
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={agreedTerms}
-                onChange={(e) => setAgreedTerms(e.target.checked)}
-                style={{ marginTop: "3px" }}
-              />
-              <span>
-                I confirm I am at least 18 years old and agree to the
-                EquivaultFX Client Terms, Anti-Money Laundering Policy, and
-                Leveraged Risk Disclosure.
-              </span>
-            </label>
+          {mode === 'login' && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '14px' }}>
+              <button
+                type="button"
+                className="auth-inline-btn"
+                onClick={() => {
+                  setMode('forgot');
+                  setAlert({ type: '', text: '' });
+                }}
+              >
+                Forgot Password?
+              </button>
+            </div>
           )}
 
           <button
             type="submit"
             disabled={loading}
             className="btn btn-crimson"
-            style={{ width: "100%", marginTop: "6px" }}
+            style={{ width: '100%' }}
           >
             {loading
-              ? "Verifying Credentials..."
-              : mode === "login"
-                ? "Access Trading Terminal"
-                : mode === "signup"
-                  ? "Create Verified Account"
-                  : mode === "forgot"
-                    ? "Send Password Reset Link"
-                    : "Update Password"}
+              ? 'Please wait...'
+              : mode === 'forgot'
+                ? 'Send Reset Link'
+                : mode === 'recovery'
+                  ? 'Update Password'
+                  : mode === 'signup'
+                    ? 'Create Account'
+                    : 'Log In'}
           </button>
+        </form>
 
-          {mode === "forgot" && (
-            <div style={{ marginTop: "12px", textAlign: "center" }}>
+        <div className="auth-switch-row">
+          {mode === 'login' && (
+            <span>
+              Don&apos;t have an account?{' '}
               <button
                 type="button"
                 className="auth-inline-btn"
                 onClick={() => {
-                  setErrorMsg("");
-                  setInfoMsg("");
-                  setMode("login");
+                  setMode('signup');
+                  setAlert({ type: '', text: '' });
                 }}
               >
-                Back to Client Log In
+                Open Account
               </button>
-            </div>
+            </span>
           )}
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-              marginTop: "14px",
-              fontSize: "12px",
-              color: "var(--text-secondary)",
-            }}
-          >
-          </div>
-        </form>
+          {mode === 'signup' && (
+            <span>
+              Already have an account?{' '}
+              <button
+                type="button"
+                className="auth-inline-btn"
+                onClick={() => {
+                  setMode('login');
+                  setAlert({ type: '', text: '' });
+                }}
+              >
+                Log In
+              </button>
+            </span>
+          )}
+
+          {(mode === 'forgot' || mode === 'recovery') && (
+            <span>
+              Remembered your password?{' '}
+              <button
+                type="button"
+                className="auth-inline-btn"
+                onClick={() => {
+                  setMode('login');
+                  setAlert({ type: '', text: '' });
+                }}
+              >
+                Back to Log In
+              </button>
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
