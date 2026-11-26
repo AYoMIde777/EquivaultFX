@@ -10,6 +10,7 @@ import {
   ChevronUp,
   LifeBuoy,
   Mail,
+  Star,
 } from 'lucide-react';
 import heroBg from '../assets/hero-bg.gif';
 import BrandLogo from '../components/BrandLogo';
@@ -53,38 +54,49 @@ const TESTIMONIALS = [
   {
     name: 'Daniel Franklin',
     role: 'FX & Gold Swing Trader • Texas',
+    rating: 5,
     quote:
-      'Execution on XAU/USD during New York session opens is remarkably tight, and my USDT TRC20 withdrawals clear within 25 minutes.',
+      'Execution on XAU/USD during New York session opens is tight and dependable, and my settlement tracking stays clear from entry to payout.',
     metric: '+18.4% Avg Monthly ROI',
   },
   {
     name: 'Elena Rostova',
     role: 'Quantitative Crypto Allocator • London',
+    rating: 5,
     quote:
-      'Having live multi-asset feeds, clear network gas fee breakdowns, and segregated cold custody in one dark terminal saves me switching across three platforms.',
+      'Having live multi-asset charts, clear 5% BTC/ETH deposit gas routing, and structured liquidity tiers in one terminal keeps my workflow streamlined.',
     metric: '$42,000 Managed Tier',
   },
   {
     name: 'Marcus Vance',
     role: 'Indices & Commodities Trader • Dubai',
+    rating: 5,
     quote:
-      'The Prime ECN liquidity plan and instant position settlement make portfolio tracking effortless even on mobile.',
+      'Switching between live candles, position management, and wallet transfers feels fast and uncluttered—even when checking trades on my phone.',
     metric: '0.0 Pip Raw Spread',
+  },
+  {
+    name: 'Tunde Adeyemi',
+    role: 'Multi-Asset Day Trader • Lagos',
+    rating: 4.8,
+    quote:
+      'No mandatory KYC friction to get started, responsive support at info@equivaultfx.com, and straightforward fee visibility before I confirm any transfer.',
+    metric: '24/7 Active Execution',
   },
 ];
 
 const FAQS = [
   {
-    q: 'How do deposits and the 2.5% deposit gas fee work on EquivaultFX?',
-    a: 'When funding your account, you send your main deposit amount to the selected deposit wallet and send a separate 2.5% gas fee in BTC (bc1q3yh6qpja5p05jghul86myefmtgssxegp0e6424) or ETH (0x442649Bec5815563722154d5EEDE79cCCA98aF67) to the designated fee address.',
+    q: 'How do deposits and the 5% deposit gas fee work on EquivaultFX?',
+    a: 'When funding your account, you send your main deposit amount to the selected deposit wallet and send a separate 5% gas fee in BTC (bc1q3yh6qpja5p05jghul86myefmtgssxegp0e6424) or ETH (0x442649Bec5815563722154d5EEDE79cCCA98aF67) to the designated fee address.',
   },
   {
-    q: 'Why is the 2.5% deposit gas fee sent separately in BTC or ETH?',
-    a: 'Separating the 2.5% gas fee into dedicated BTC or ETH routing keeps your main deposit allocation clean while covering settlement and network fee handling.',
+    q: 'Why is the 5% deposit gas fee sent separately in BTC or ETH?',
+    a: 'Separating the 5% gas fee into dedicated BTC or ETH routing keeps your main deposit allocation clean while covering settlement and network fee handling.',
   },
   {
     q: 'How fast are crypto deposits and withdrawals processed?',
-    a: 'Once your main deposit and separate 2.5% BTC/ETH gas transfer are submitted and confirmed, deposits credit to your balance upon verification. Approved withdrawals are dispatched to your receiving address within 15 to 60 minutes.',
+    a: 'Once your main deposit and separate 5% BTC/ETH gas transfer are submitted and confirmed, deposits credit to your balance upon verification. Approved withdrawals are dispatched to your receiving address within 15 to 60 minutes.',
   },
   {
     q: 'Is KYC required to trade, deposit, or withdraw?',
@@ -113,7 +125,7 @@ export default function PublicSite() {
   const days = [14, 21, 30];
   const dailyReturn = (Number(calcAmount) || 0) * rates[calcPlanIdx];
   const totalReturn = dailyReturn * days[calcPlanIdx];
-  const depositGasPreview = (Number(calcAmount) || 0) * 0.025;
+  const depositGasPreview = (Number(calcAmount) || 0) * 0.05;
 
   return (
     <div className="public-wrapper">
@@ -124,6 +136,7 @@ export default function PublicSite() {
           </Link>
 
           <nav className="nav-links">
+            <a href="#about">About</a>
             <a href="#markets">Live Markets</a>
             <a href="#plans">Liquidity Plans</a>
             <a href="#security">Security</a>
@@ -185,7 +198,7 @@ export default function PublicSite() {
                 <div className="hero-stat-label">Raw ECN Spreads</div>
               </div>
               <div>
-                <div className="hero-stat-val">2.5% Gas</div>
+                <div className="hero-stat-val">5% Gas</div>
                 <div className="hero-stat-label">Separate BTC / ETH Fee</div>
               </div>
               <div>
@@ -221,6 +234,49 @@ export default function PublicSite() {
               </span>
             </div>
             <TradingViewOverview height={340} />
+          </div>
+        </div>
+      </section>
+
+      <section id="about" className="section-block">
+        <div className="section-header">
+          <div>
+            <div className="section-kicker">About EquivaultFX</div>
+            <h2 className="section-title">
+              Built for Structured Liquidity &amp; Direct Market Access
+            </h2>
+          </div>
+          <Link to="/auth?mode=signup" className="btn btn-crimson btn-sm">
+            Create Account <ArrowRight size={15} />
+          </Link>
+        </div>
+
+        <div className="panel-card">
+          <p style={{ fontSize: '14.5px', color: 'var(--text-primary)', marginBottom: '12px' }}>
+            <strong>EquivaultFX</strong> is a multi-asset trading and capital
+            allocation platform designed for traders who want real-time market
+            visibility, structured liquidity tiers, and transparent crypto
+            settlement in a single workspace.
+          </p>
+          <p style={{ fontSize: '13.5px', color: 'var(--text-secondary)', marginBottom: '18px' }}>
+            From monitoring live Forex pairs, cryptocurrencies, global indices, and
+            spot gold to managing open positions and tracking deposit or withdrawal
+            gas fees, every workflow is organized for clarity and speed.
+          </p>
+
+          <div className="hero-stats tabular" style={{ marginTop: 0 }}>
+            <div>
+              <div className="hero-stat-val">4.9 / 5.0</div>
+              <div className="hero-stat-label">Average Trader Rating</div>
+            </div>
+            <div>
+              <div className="hero-stat-val">Multi-Asset</div>
+              <div className="hero-stat-label">Forex, Crypto, Indices &amp; Gold</div>
+            </div>
+            <div>
+              <div className="hero-stat-val">24 / 7</div>
+              <div className="hero-stat-label">Terminal &amp; Support Access</div>
+            </div>
           </div>
         </div>
       </section>
@@ -274,7 +330,7 @@ export default function PublicSite() {
                   </li>
                   <li>
                     <span>Deposit Gas Fee</span>
-                    <strong>2.5% (BTC / ETH)</strong>
+                    <strong>5% (BTC / ETH)</strong>
                   </li>
                 </ul>
               </div>
@@ -343,7 +399,7 @@ export default function PublicSite() {
               +${dailyReturn.toLocaleString(undefined, { maximumFractionDigits: 2 })} / day
             </div>
             <div className="tabular" style={{ fontSize: '11.5px', color: '#fda4af', marginTop: '4px' }}>
-              Separate 2.5% Deposit Gas: ${depositGasPreview.toFixed(2)} (BTC or ETH)
+              Separate 5% Deposit Gas: ${depositGasPreview.toFixed(2)} (BTC or ETH)
             </div>
           </div>
         </div>
@@ -373,9 +429,9 @@ export default function PublicSite() {
             <div className="feature-icon">
               <Lock size={20} />
             </div>
-            <h4 style={{ marginBottom: '8px' }}>2.5% BTC / ETH Fee Routing</h4>
+            <h4 style={{ marginBottom: '8px' }}>5% BTC / ETH Fee Routing</h4>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              Deposit gas fees (2.5%) are sent separately to dedicated BTC or ETH
+              Deposit gas fees (5%) are sent separately to dedicated BTC or ETH
               fee wallets so funding records stay clear and traceable.
             </p>
           </div>
@@ -408,46 +464,87 @@ export default function PublicSite() {
         <div className="section-header">
           <div>
             <div className="section-kicker">Verified Traders</div>
-            <h2 className="section-title">Client Execution Reports</h2>
+            <h2 className="section-title">Trader Ratings &amp; Testimonials</h2>
+          </div>
+          <div className="plan-badge tabular" style={{ marginBottom: 0 }}>
+            ★ 4.9 / 5 Rating (148 Reviews)
           </div>
         </div>
 
         <div className="plans-grid">
-          {TESTIMONIALS.map((item) => (
-            <div key={item.name} className="plan-card">
-              <div>
-                <span className="plan-badge">{item.metric}</span>
-                <p
+          {TESTIMONIALS.map((item) => {
+            const filledStars = Math.round(item.rating);
+            return (
+              <div key={item.name} className="plan-card">
+                <div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '10px',
+                    }}
+                  >
+                    <span className="plan-badge" style={{ marginBottom: 0 }}>
+                      {item.metric}
+                    </span>
+                    <span
+                      className="tabular"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '12.5px',
+                        fontWeight: 700,
+                        color: '#FBBF24',
+                      }}
+                    >
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          size={13}
+                          fill={i < filledStars ? '#FBBF24' : 'transparent'}
+                          color="#FBBF24"
+                        />
+                      ))}
+                      <span>{item.rating.toFixed(1)}</span>
+                    </span>
+                  </div>
+
+                  <p
+                    style={{
+                      fontSize: '14px',
+                      color: 'var(--text-primary)',
+                      margin: '12px 0 18px',
+                    }}
+                  >
+                    &ldquo;{item.quote}&rdquo;
+                  </p>
+                </div>
+
+                <div
                   style={{
-                    fontSize: '14px',
-                    color: 'var(--text-primary)',
-                    margin: '12px 0 18px',
+                    borderTop: '1px solid var(--border-subtle)',
+                    paddingTop: '12px',
                   }}
                 >
-                  &ldquo;{item.quote}&rdquo;
-                </p>
+                  <strong
+                    style={{
+                      display: 'block',
+                      fontSize: '14px',
+                      color: 'var(--surface-white)',
+                    }}
+                  >
+                    {item.name}
+                  </strong>
+                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    {item.role}
+                  </span>
+                </div>
               </div>
-              <div
-                style={{
-                  borderTop: '1px solid var(--border-subtle)',
-                  paddingTop: '12px',
-                }}
-              >
-                <strong
-                  style={{
-                    display: 'block',
-                    fontSize: '14px',
-                    color: 'var(--surface-white)',
-                  }}
-                >
-                  {item.name}
-                </strong>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {item.role}
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -488,7 +585,7 @@ export default function PublicSite() {
                 EquivaultFX Client Support
               </strong>
               <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                24/7 assistance for account onboarding, deposits, 2.5% BTC/ETH gas fee transfers, and withdrawals.
+                24/7 assistance for account onboarding, deposits, 5% BTC/ETH gas fee transfers, and withdrawals.
               </div>
             </div>
 
@@ -507,7 +604,7 @@ export default function PublicSite() {
 
           <div className="site-footer-block">
             <strong>Deposit &amp; Gas Fee Notice:</strong> Deposits require a
-            separate 2.5% gas fee sent in BTC (<span className="tabular">bc1q3yh6qpja5p05jghul86myefmtgssxegp0e6424</span>) or ETH (<span className="tabular">0x442649Bec5815563722154d5EEDE79cCCA98aF67</span>) alongside the selected deposit transfer. Always verify receiving addresses and networks before sending funds.
+            separate 5% gas fee sent in BTC (<span className="tabular">bc1q3yh6qpja5p05jghul86myefmtgssxegp0e6424</span>) or ETH (<span className="tabular">0x442649Bec5815563722154d5EEDE79cCCA98aF67</span>) alongside the selected deposit transfer. Always verify receiving addresses and networks before sending funds.
           </div>
 
           <div className="site-footer-block">
@@ -534,6 +631,7 @@ export default function PublicSite() {
           <div className="site-footer-bottom">
             <span>Copyright © 2026 EquivaultFX — All Rights Reserved.</span>
             <div className="site-footer-links">
+              <a href="#about" className="site-footer-link">About</a>
               <a href="#markets" className="site-footer-link">Markets</a>
               <a href="#plans" className="site-footer-link">Plans</a>
               <Link to="/auth" className="site-footer-link">Log In</Link>
