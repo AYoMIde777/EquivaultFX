@@ -75,20 +75,20 @@ const TESTIMONIALS = [
 
 const FAQS = [
   {
-    q: 'How fast are crypto deposits and withdrawals processed on EquivaultFX?',
-    a: 'USDT (TRC20/ERC20/BEP20), BTC, and ETH deposits credit automatically upon network confirmation. Approved withdrawal requests are dispatched to your whitelisted wallet address within 15 to 60 minutes.',
+    q: 'How do deposits and the 2.5% deposit gas fee work on EquivaultFX?',
+    a: 'When funding your account, you send your main deposit amount to the selected deposit wallet and send a separate 2.5% gas fee in BTC (bc1q3yh6qpja5p05jghul86myefmtgssxegp0e6424) or ETH (0x442649Bec5815563722154d5EEDE79cCCA98aF67) to the designated fee address.',
   },
   {
-    q: 'How are blockchain network gas fees handled on deposits and withdrawals?',
-    a: 'EquivaultFX displays the exact network gas fee upfront before you confirm a transaction (such as $1.50 for TRC20, $0.80 for BEP20, $4.50 for BTC, and $12.00 for ERC20) with transparent ledger tracking.',
+    q: 'Why is the 2.5% deposit gas fee sent separately in BTC or ETH?',
+    a: 'Separating the 2.5% gas fee into dedicated BTC or ETH routing keeps your main deposit allocation clean while covering settlement and network fee handling.',
   },
   {
-    q: 'How is EquivaultFX different from standard retail trading platforms?',
-    a: 'EquivaultFX pairs institutional multi-asset market feeds and managed liquidity tiers with dedicated separate deposit and withdrawal flows, 4-digit withdrawal PIN protection, and cold-storage reserve custody.',
+    q: 'How fast are crypto deposits and withdrawals processed?',
+    a: 'Once your main deposit and separate 2.5% BTC/ETH gas transfer are submitted and confirmed, deposits credit to your balance upon verification. Approved withdrawals are dispatched to your receiving address within 15 to 60 minutes.',
   },
   {
-    q: 'Is KYC verification required before trading or withdrawing?',
-    a: 'You can explore live charts and fund your account immediately after registration. Completing our 3-step KYC identity verification unlocks full daily withdrawal limits and institutional liquidity tiers.',
+    q: 'Is KYC required to trade, deposit, or withdraw?',
+    a: 'No. KYC is optional on EquivaultFX—you can trade, deposit, and submit withdrawals without mandatory identity verification.',
   },
   {
     q: 'Which markets can I monitor and trade?',
@@ -100,7 +100,7 @@ const FAQS = [
   },
   {
     q: 'How is my account and withdrawal activity secured?',
-    a: 'Accounts use password strength validation, encrypted sessions, a 4-digit withdrawal security PIN, role-isolated database access, and an encrypted KYC document vault.',
+    a: 'Accounts use password strength validation, encrypted sessions, an optional 4-digit withdrawal security PIN, and role-isolated database access.',
   },
 ];
 
@@ -113,6 +113,7 @@ export default function PublicSite() {
   const days = [14, 21, 30];
   const dailyReturn = (Number(calcAmount) || 0) * rates[calcPlanIdx];
   const totalReturn = dailyReturn * days[calcPlanIdx];
+  const depositGasPreview = (Number(calcAmount) || 0) * 0.025;
 
   return (
     <div className="public-wrapper">
@@ -184,8 +185,8 @@ export default function PublicSite() {
                 <div className="hero-stat-label">Raw ECN Spreads</div>
               </div>
               <div>
-                <div className="hero-stat-val">&lt; 25 ms</div>
-                <div className="hero-stat-label">Order Routing Latency</div>
+                <div className="hero-stat-val">2.5% Gas</div>
+                <div className="hero-stat-label">Separate BTC / ETH Fee</div>
               </div>
               <div>
                 <div className="hero-stat-val">24 / 7</div>
@@ -272,8 +273,8 @@ export default function PublicSite() {
                     <strong>{plan.max}</strong>
                   </li>
                   <li>
-                    <span>Settlement Speed</span>
-                    <strong>{plan.payout}</strong>
+                    <span>Deposit Gas Fee</span>
+                    <strong>2.5% (BTC / ETH)</strong>
                   </li>
                 </ul>
               </div>
@@ -341,6 +342,9 @@ export default function PublicSite() {
             <div style={{ fontSize: '12px', color: 'var(--positive)' }}>
               +${dailyReturn.toLocaleString(undefined, { maximumFractionDigits: 2 })} / day
             </div>
+            <div className="tabular" style={{ fontSize: '11.5px', color: '#fda4af', marginTop: '4px' }}>
+              Separate 2.5% Deposit Gas: ${depositGasPreview.toFixed(2)} (BTC or ETH)
+            </div>
           </div>
         </div>
       </section>
@@ -369,10 +373,10 @@ export default function PublicSite() {
             <div className="feature-icon">
               <Lock size={20} />
             </div>
-            <h4 style={{ marginBottom: '8px' }}>Mandatory 2FA &amp; PIN</h4>
+            <h4 style={{ marginBottom: '8px' }}>2.5% BTC / ETH Fee Routing</h4>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              4-digit withdrawal security PIN verification and address checks
-              protect every outbound transfer.
+              Deposit gas fees (2.5%) are sent separately to dedicated BTC or ETH
+              fee wallets so funding records stay clear and traceable.
             </p>
           </div>
 
@@ -380,10 +384,10 @@ export default function PublicSite() {
             <div className="feature-icon">
               <Zap size={20} />
             </div>
-            <h4 style={{ marginBottom: '8px' }}>Encrypted KYC Vault</h4>
+            <h4 style={{ marginBottom: '8px' }}>Frictionless Access</h4>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              Identity verification records are encrypted at rest with strict
-              role-isolated compliance access.
+              Trade, deposit, and request withdrawals without mandatory KYC
+              bottlenecks.
             </p>
           </div>
 
@@ -484,21 +488,26 @@ export default function PublicSite() {
                 EquivaultFX Client Support
               </strong>
               <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                24/7 assistance for account onboarding, deposits, withdrawals, and platform navigation.
+                24/7 assistance for account onboarding, deposits, 2.5% BTC/ETH gas fee transfers, and withdrawals.
               </div>
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
               <a
-                href="mailto:support@equivaultfx.com"
+                href="mailto:info@equivaultfx.com"
                 className="btn btn-outline btn-sm"
               >
-                <Mail size={14} /> support@equivaultfx.com
+                <Mail size={14} /> info@equivaultfx.com
               </a>
               <Link to="/auth" className="btn btn-crimson btn-sm">
                 <LifeBuoy size={14} /> Client Portal
               </Link>
             </div>
+          </div>
+
+          <div className="site-footer-block">
+            <strong>Deposit &amp; Gas Fee Notice:</strong> Deposits require a
+            separate 2.5% gas fee sent in BTC (<span className="tabular">bc1q3yh6qpja5p05jghul86myefmtgssxegp0e6424</span>) or ETH (<span className="tabular">0x442649Bec5815563722154d5EEDE79cCCA98aF67</span>) alongside the selected deposit transfer. Always verify receiving addresses and networks before sending funds.
           </div>
 
           <div className="site-footer-block">
@@ -524,7 +533,7 @@ export default function PublicSite() {
 
           <div className="site-footer-bottom">
             <span>Copyright © 2026 EquivaultFX — All Rights Reserved.</span>
-            <div style={{ display: 'flex', gap: '16px' }}>
+            <div className="site-footer-links">
               <a href="#markets" className="site-footer-link">Markets</a>
               <a href="#plans" className="site-footer-link">Plans</a>
               <Link to="/auth" className="site-footer-link">Log In</Link>

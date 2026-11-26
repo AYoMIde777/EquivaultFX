@@ -1,3 +1,43 @@
+:root {
+  --bg-page: #09090b;
+  --bg-card: #111114;
+  --bg-input: #141418;
+  --border-subtle: #27272a;
+  --text-primary: #f4f4f6;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --surface-white: #ffffff;
+  --accent-crimson: #991b1b;
+  --accent-crimson-hover: #b91c1c;
+  --positive: #10b981;
+  --negative: #ef4444;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.brand-logo-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+/* Hero Section */
 .hero-section {
   position: relative;
   overflow: hidden;
@@ -21,62 +61,4 @@
 .hero-container {
   position: relative;
   z-index: 2;
-}
-
-.brand-logo-img {
-  width: 32px;
-  height: 32px;
-  object-fit: contain;
-  border-radius: 6px;
-}
-.site-legal-footer {
-  background: var(--bg-card, #111114);
-  border-top: 1px solid var(--border-subtle, #27272A);
-  color: var(--text-secondary, #A1A1AA);
-  padding: 36px 20px;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.site-footer-inner {
-  max-width: 1180px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.site-footer-top {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--border-subtle, #27272A);
-}
-
-.site-footer-block strong {
-  color: #E4E4E7;
-}
-
-.site-footer-bottom {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-subtle, #27272A);
-  color: var(--text-muted, #71717A);
-  font-size: 11.5px;
-}
-
-.site-footer-link {
-  color: var(--text-secondary, #A1A1AA);
-  text-decoration: none;
-}
-
-.site-footer-link:hover {
-  color: #FFFFFF;
 }

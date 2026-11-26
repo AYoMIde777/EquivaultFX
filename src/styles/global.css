@@ -1,4 +1,26 @@
 /* src/styles/global.css */
+:root {
+  --bg-primary: #09090b;
+  --bg-secondary: #111114;
+  --bg-card: #111114;
+  --bg-input: #141418;
+  --border-subtle: #27272a;
+  --border-strong: #3f3f46;
+  --text-primary: #f4f4f6;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --surface-white: #ffffff;
+  --surface-white-text: #09090b;
+  --accent-crimson: #991b1b;
+  --accent-crimson-hover: #b91c1c;
+  --accent-crimson-soft: rgba(153, 27, 27, 0.16);
+  --positive: #10b981;
+  --positive-soft: rgba(16, 185, 129, 0.16);
+  --negative: #ef4444;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+}
+
 *,
 *::before,
 *::after {
@@ -31,7 +53,8 @@ a {
 
 button,
 input,
-select {
+select,
+textarea {
   font-family: inherit;
 }
 

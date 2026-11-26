@@ -19,7 +19,7 @@ export default function SiteFooter() {
               href="mailto:support@equivaultfx.com"
               className="btn btn-outline btn-sm"
             >
-              <Mail size={14} /> support@equivaultfx.com
+              <Mail size={14} /> info@equivaultfx.com
             </a>
             <Link to="/auth" className="btn btn-crimson btn-sm">
               <LifeBuoy size={14} /> Client Portal
