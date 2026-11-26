@@ -49,8 +49,8 @@ const PLANS = [
 
 const TESTIMONIALS = [
   {
-    name: 'Daniel Okafor',
-    role: 'FX & Gold Swing Trader • Lagos',
+    name: 'Daniel Franklin',
+    role: 'FX & Gold Swing Trader • Texas',
     quote:
       'Execution on XAU/USD during New York session opens is remarkably tight, and my USDT TRC20 withdrawals clear within 25 minutes.',
     metric: '+18.4% Avg Monthly ROI',
