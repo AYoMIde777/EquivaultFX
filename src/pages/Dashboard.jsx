@@ -92,7 +92,7 @@ const NETWORK_OPTIONS = [
 const WITHDRAW_CRYPTO_TABS = ['BTC', 'ETH', 'USDT'];
 const DEPOSIT_PRESETS = [50, 100, 500, 1000, 5000];
 const WITHDRAW_PRESETS = [100, 500, 1000, 2500, 5000];
-const DEPOSIT_GAS_RATE = 0.05;
+const DEPOSIT_CHARGES_RATE = 0.05;
 const WITHDRAWAL_GAS_RATE = 0.1;
 
 export default function Dashboard({ session }) {
@@ -287,8 +287,8 @@ export default function Dashboard({ session }) {
   const activeDepositAddress =
     walletsByNetwork[depositNetwork.id] || depositNetwork.defaultWallet;
   const parsedDepositAmt = Math.max(0, Number(depositAmt) || 0);
-  const depositGasFee = Number((parsedDepositAmt * DEPOSIT_GAS_RATE).toFixed(2));
-  const totalDepositWithFee = Number((parsedDepositAmt + depositGasFee).toFixed(2));
+  const depositCharges = Number((parsedDepositAmt * DEPOSIT_CHARGES_RATE).toFixed(2));
+  const totalDepositWithCharges = Number((parsedDepositAmt + depositCharges).toFixed(2));
 
   const availableWithdrawNetworks = NETWORK_OPTIONS.filter(
     (n) => n.asset === withdrawCrypto
@@ -420,9 +420,9 @@ export default function Dashboard({ session }) {
 
     const { error } = await supabase.from('transactions').insert({
       user_id: activeUserId,
-      type: `Deposit (${depositNetwork.id}) • 5% Gas`,
+      type: `Deposit (${depositNetwork.id}) • 5% Charges`,
       amount: parsedDepositAmt,
-      gas_fee: depositGasFee,
+      gas_fee: depositCharges,
       network: depositNetwork.id,
       wallet_address: depositTxHash.trim() || activeDepositAddress,
       status: 'Pending',
@@ -699,7 +699,6 @@ export default function Dashboard({ session }) {
         .update({ balance: currentBal + txAmt })
         .eq('id', tx.user_id);
     } else if (decision === 'Rejected' && txAmt < 0) {
-      // Refund the held withdrawal principal back to the user's balance
       await supabase
         .from('profiles')
         .update({ balance: currentBal + Math.abs(txAmt) })
@@ -954,7 +953,7 @@ export default function Dashboard({ session }) {
                   </div>
                 </div>
                 <div className="kpi-card">
-                  <div className="kpi-label">Deposit / Withdraw Gas</div>
+                  <div className="kpi-label">Deposit Charges / Withdraw Gas</div>
                   <div className="kpi-value">5% / 10%</div>
                 </div>
               </div>
@@ -1032,7 +1031,7 @@ export default function Dashboard({ session }) {
                 >
                   <strong>
                     {ticketMode === 'trade' && `Order Ticket — ${selectedSymbol.label}`}
-                    {ticketMode === 'deposit' && `Quick Deposit (${depositNetwork.id} • 5% Gas)`}
+                    {ticketMode === 'deposit' && `Quick Deposit (${depositNetwork.id} • 5% Charges)`}
                     {ticketMode === 'withdraw' && `Quick Withdraw (${withdrawNetwork.asset} • 10% Separate Gas)`}
                   </strong>
 
@@ -1121,7 +1120,7 @@ export default function Dashboard({ session }) {
                   <div className="dock-inline-row" style={{ justifyContent: 'space-between' }}>
                     <div>
                       <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                        Deposits include a 5% gas fee calculation (${depositGasFee.toFixed(2)} on ${parsedDepositAmt.toFixed(2)}).
+                        Deposits include 5% charges (${depositCharges.toFixed(2)} on ${parsedDepositAmt.toFixed(2)}).
                       </div>
                     </div>
                     <button
@@ -1239,7 +1238,7 @@ export default function Dashboard({ session }) {
                   <div>
                     <h3>Deposit Funds</h3>
                     <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      5% gas fee applies on deposits
+                      5% charges apply on deposits
                     </div>
                   </div>
                   <div className="tabular" style={{ textAlign: 'right' }}>
@@ -1305,7 +1304,7 @@ export default function Dashboard({ session }) {
                     <div className="form-group">
                       <label className="form-label">2 • Enter Amount</label>
                       <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                        Minimum $10.00. A 5% deposit gas fee is calculated automatically.
+                        Minimum $10.00. A 5% deposit charge is calculated automatically.
                       </div>
                       <input
                         type="number"
@@ -1340,12 +1339,12 @@ export default function Dashboard({ session }) {
                         <strong>${parsedDepositAmt.toFixed(2)}</strong>
                       </div>
                       <div className="summary-row">
-                        <span>Gas Fee (5%)</span>
-                        <strong style={{ color: '#fda4af' }}>+${depositGasFee.toFixed(2)}</strong>
+                        <span>Charges (5%)</span>
+                        <strong style={{ color: '#fda4af' }}>+${depositCharges.toFixed(2)}</strong>
                       </div>
                       <div className="summary-row">
-                        <span>Total with 5% Gas Fee</span>
-                        <strong>${totalDepositWithFee.toFixed(2)}</strong>
+                        <span>Total with 5% Charges</span>
+                        <strong>${totalDepositWithCharges.toFixed(2)}</strong>
                       </div>
                       <div className="summary-row">
                         <span>Credited to Balance</span>
@@ -1369,7 +1368,7 @@ export default function Dashboard({ session }) {
                       </div>
                       <h4>Send Your {depositNetwork.id}</h4>
                       <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
-                        Send ${totalDepositWithFee.toFixed(2)} equivalent (${parsedDepositAmt.toFixed(2)} deposit + ${depositGasFee.toFixed(2)} 5% gas fee) in {depositNetwork.fullLabel} to this address
+                        Send ${totalDepositWithCharges.toFixed(2)} equivalent (${parsedDepositAmt.toFixed(2)} deposit + ${depositCharges.toFixed(2)} 5% charges) in {depositNetwork.fullLabel} to this address
                       </p>
                     </div>
 
@@ -1409,12 +1408,12 @@ export default function Dashboard({ session }) {
                         <strong>${parsedDepositAmt.toFixed(2)}</strong>
                       </div>
                       <div className="summary-row">
-                        <span>Gas fee (5%)</span>
-                        <strong style={{ color: '#fda4af' }}>+${depositGasFee.toFixed(2)}</strong>
+                        <span>Charges (5%)</span>
+                        <strong style={{ color: '#fda4af' }}>+${depositCharges.toFixed(2)}</strong>
                       </div>
                       <div className="summary-row">
                         <span>Total to send</span>
-                        <strong>${totalDepositWithFee.toFixed(2)}</strong>
+                        <strong>${totalDepositWithCharges.toFixed(2)}</strong>
                       </div>
                     </div>
 
@@ -1443,7 +1442,7 @@ export default function Dashboard({ session }) {
                     <CheckCircle2 size={36} color="#10B981" style={{ marginBottom: '10px' }} />
                     <h4>Deposit Submitted</h4>
                     <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '8px 0 18px' }}>
-                      Your ${parsedDepositAmt.toFixed(2)} ({depositNetwork.id}) deposit request with ${depositGasFee.toFixed(2)} (5% gas fee) is now Pending confirmation.
+                      Your ${parsedDepositAmt.toFixed(2)} ({depositNetwork.id}) deposit request with ${depositCharges.toFixed(2)} (5% charges) is now Pending confirmation.
                     </p>
                     <button
                       type="button"
@@ -1465,7 +1464,7 @@ export default function Dashboard({ session }) {
                     <thead>
                       <tr>
                         <th>Amount</th>
-                        <th>5% Gas Fee</th>
+                        <th>5% Charges</th>
                         <th>Method</th>
                         <th>Date</th>
                         <th>Status</th>
@@ -1499,7 +1498,6 @@ export default function Dashboard({ session }) {
           {activeTab === 'withdraw' && (
             <div style={{ maxWidth: '640px' }}>
               <div className="panel-card">
-                {/* Top Header matching step progress */}
                 <div
                   style={{
                     display: 'flex',
@@ -1560,7 +1558,6 @@ export default function Dashboard({ session }) {
                     </div>
                   </div>
 
-                  {/* Step Indicator Dots */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     {['form', 'gas_summary', 'pay_gas'].map((s, idx) => {
                       const stepOrder = { form: 0, gas_summary: 1, pay_gas: 2, submitted: 3 };
@@ -1592,7 +1589,6 @@ export default function Dashboard({ session }) {
                   </div>
                 )}
 
-                {/* STEP 1: Crypto, Network, Amount, Payout Address */}
                 {withdrawStep === 'form' && (
                   <form onSubmit={handleWithdrawContinue}>
                     <div className="form-group">
@@ -1786,7 +1782,6 @@ export default function Dashboard({ session }) {
                   </form>
                 )}
 
-                {/* STEP 2: Gas Fee — Paid Separately */}
                 {withdrawStep === 'gas_summary' && (
                   <div>
                     <div
@@ -1897,7 +1892,6 @@ export default function Dashboard({ session }) {
                   </div>
                 )}
 
-                {/* STEP 3: Pay Gas & Submit (QR Code + Custody Wallet + Done) */}
                 {withdrawStep === 'pay_gas' && (
                   <div>
                     <div
@@ -2057,7 +2051,6 @@ export default function Dashboard({ session }) {
                   </div>
                 )}
 
-                {/* STEP 4: Confirmation */}
                 {withdrawStep === 'submitted' && (
                   <div style={{ textAlign: 'center', padding: '16px 0' }}>
                     <CheckCircle2 size={40} color="#10B981" style={{ marginBottom: '10px' }} />
@@ -2131,7 +2124,7 @@ export default function Dashboard({ session }) {
           {activeTab === 'history' && (
             <div className="panel-card">
               <div className="panel-header">
-                <h3>Full Transaction &amp; Gas History</h3>
+                <h3>Full Transaction &amp; Fee History</h3>
               </div>
               <div className="data-table-wrap">
                 <table className="data-table tabular">
@@ -2139,7 +2132,7 @@ export default function Dashboard({ session }) {
                     <tr>
                       <th>Type</th>
                       <th>Amount</th>
-                      <th>Gas Fee</th>
+                      <th>Charges / Gas</th>
                       <th>Address / TXID</th>
                       <th>Status</th>
                       <th>Date</th>
@@ -2495,7 +2488,7 @@ export default function Dashboard({ session }) {
                         <th>Client</th>
                         <th>Type</th>
                         <th>Amount</th>
-                        <th>Gas Fee</th>
+                        <th>Charges / Gas</th>
                         <th>Wallet / TXID</th>
                         <th>Status</th>
                         <th>Action</th>
