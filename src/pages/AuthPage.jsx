@@ -327,7 +327,7 @@ export default function AuthPage() {
                   <input
                     type="tel"
                     className="form-control"
-                    placeholder="+234 800 000 0000"
+                    placeholder="+1 000 000 0000"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     required
