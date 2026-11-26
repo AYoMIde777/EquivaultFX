@@ -11,11 +11,17 @@ import {
   LifeBuoy,
   Mail,
   Star,
+  Activity,
+  BarChart3,
+  Layers,
 } from 'lucide-react';
 import heroBg from '../assets/hero-bg.gif';
 import BrandLogo from '../components/BrandLogo';
 import TradingViewTicker from '../components/TradingViewTicker';
 import TradingViewOverview from '../components/TradingViewOverview';
+import TradingViewTechnicalAnalysis from '../components/TradingViewTechnicalAnalysis';
+import TradingViewScreener from '../components/TradingViewScreener';
+import TradingViewHeatmap from '../components/TradingViewHeatmap';
 
 const PLANS = [
   {
@@ -116,10 +122,18 @@ const FAQS = [
   },
 ];
 
+const TA_SYMBOLS = [
+  { label: 'BTC/USDT', value: 'BINANCE:BTCUSDT' },
+  { label: 'ETH/USDT', value: 'BINANCE:ETHUSDT' },
+  { label: 'EUR/USD', value: 'FX:EURUSD' },
+  { label: 'Gold XAU/USD', value: 'OANDA:XAUUSD' },
+];
+
 export default function PublicSite() {
   const [calcAmount, setCalcAmount] = useState(2500);
   const [calcPlanIdx, setCalcPlanIdx] = useState(1);
   const [openFaq, setOpenFaq] = useState(0);
+  const [taSymbol, setTaSymbol] = useState(TA_SYMBOLS[0].value);
 
   const rates = [0.018, 0.026, 0.035];
   const days = [14, 21, 30];
@@ -137,11 +151,11 @@ export default function PublicSite() {
           <nav className="nav-links">
             <a href="#about">About</a>
             <a href="#markets">Live Markets</a>
+            <a href="#analytics">Signals &amp; Heatmap</a>
             <a href="#plans">Liquidity Plans</a>
             <a href="#security">Security</a>
             <a href="#testimonials">Testimonials</a>
             <a href="#faq">FAQ</a>
-            <a href="#support-legal">Support</a>
           </nav>
 
           <div className="nav-actions">
@@ -157,7 +171,8 @@ export default function PublicSite() {
 
       <TradingViewTicker />
 
-      <section className="hero-section">
+      {/* Band 1: Hero */}
+      <section className="hero-section band-black">
         <img
           src={heroBg}
           alt="EquivaultFX market backdrop"
@@ -237,7 +252,8 @@ export default function PublicSite() {
         </div>
       </section>
 
-      <section id="about" className="section-block">
+      {/* Band 2: About Us (Elevated Charcoal) */}
+      <section id="about" className="section-block band-charcoal">
         <div className="section-header">
           <div>
             <div className="section-kicker">About EquivaultFX</div>
@@ -263,29 +279,34 @@ export default function PublicSite() {
             tracking transactions, every workflow is organized for clarity and speed.
           </p>
 
-          <div className="hero-stats tabular" style={{ marginTop: 0 }}>
-            <div>
+          <div className="terminal-strip tabular">
+            <div className="terminal-stat-box">
               <div className="hero-stat-val">4.9 / 5.0</div>
               <div className="hero-stat-label">Average Trader Rating</div>
             </div>
-            <div>
+            <div className="terminal-stat-box">
               <div className="hero-stat-val">BTC/USDT</div>
               <div className="hero-stat-label">Primary Trading Instrument</div>
             </div>
-            <div>
+            <div className="terminal-stat-box">
+              <div className="hero-stat-val">5 Markets</div>
+              <div className="hero-stat-label">Crypto, FX, Gold, Indices</div>
+            </div>
+            <div className="terminal-stat-box">
               <div className="hero-stat-val">24 / 7</div>
-              <div className="hero-stat-label">Terminal &amp; Support Access</div>
+              <div className="hero-stat-label">Terminal &amp; Support Desk</div>
             </div>
           </div>
         </div>
       </section>
 
-      <section id="markets" className="section-block">
+      {/* Band 3: Live Markets & Screener (Deep Graphite) */}
+      <section id="markets" className="section-block band-graphite">
         <div className="section-header">
           <div>
-            <div className="section-kicker">Real-Time Data</div>
+            <div className="section-kicker">Real-Time Terminal</div>
             <h2 className="section-title">
-              Crypto, Forex, Indices &amp; Commodities
+              Market Overview &amp; Live Asset Screener
             </h2>
           </div>
           <Link to="/dashboard" className="btn btn-outline btn-sm">
@@ -293,10 +314,100 @@ export default function PublicSite() {
           </Link>
         </div>
 
-        <TradingViewOverview height={480} />
+        <div className="widgets-two-col">
+          <div className="panel-card" style={{ marginBottom: 0 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '12px',
+              }}
+            >
+              <BarChart3 size={17} color="#fda4af" />
+              <strong>Multi-Asset Quotes &amp; Watchlist</strong>
+            </div>
+            <TradingViewOverview height={430} />
+          </div>
+
+          <div className="panel-card" style={{ marginBottom: 0 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '12px',
+              }}
+            >
+              <Layers size={17} color="#fda4af" />
+              <strong>Live Market Screener</strong>
+            </div>
+            <TradingViewScreener height={430} />
+          </div>
+        </div>
       </section>
 
-      <section id="plans" className="section-block">
+      {/* Band 4: Technical Signals & Crypto Heatmap (Subtle Crimson Tint) */}
+      <section id="analytics" className="section-block band-crimson-tint">
+        <div className="section-header">
+          <div>
+            <div className="section-kicker">Market Depth &amp; Sentiment</div>
+            <h2 className="section-title">
+              Technical Gauges &amp; Crypto Heatmap
+            </h2>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {TA_SYMBOLS.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                className={`btn btn-sm ${
+                  taSymbol === item.value ? 'btn-crimson' : 'btn-outline'
+                }`}
+                onClick={() => setTaSymbol(item.value)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="widgets-two-col">
+          <div className="panel-card" style={{ marginBottom: 0 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '12px',
+              }}
+            >
+              <Activity size={17} color="#10B981" />
+              <strong>Technical Summary Gauge</strong>
+            </div>
+            <TradingViewTechnicalAnalysis symbol={taSymbol} height={420} />
+          </div>
+
+          <div className="panel-card" style={{ marginBottom: 0 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '12px',
+              }}
+            >
+              <Globe size={17} color="#fda4af" />
+              <strong>Crypto Market Cap &amp; Mover Heatmap</strong>
+            </div>
+            <TradingViewHeatmap height={420} />
+          </div>
+        </div>
+      </section>
+
+      {/* Band 5: Liquidity Plans & Calculator (Elevated Charcoal) */}
+      <section id="plans" className="section-block band-charcoal">
         <div className="section-header">
           <div>
             <div className="section-kicker">Capital Allocation</div>
@@ -401,7 +512,8 @@ export default function PublicSite() {
         </div>
       </section>
 
-      <section id="security" className="section-block">
+      {/* Band 6: Security & Infrastructure (Pitch Black) */}
+      <section id="security" className="section-block band-black">
         <div className="section-header">
           <div>
             <div className="section-kicker">Infrastructure</div>
@@ -456,7 +568,8 @@ export default function PublicSite() {
         </div>
       </section>
 
-      <section id="testimonials" className="section-block">
+      {/* Band 7: Testimonials & Ratings (Subtle Crimson Tint) */}
+      <section id="testimonials" className="section-block band-crimson-tint">
         <div className="section-header">
           <div>
             <div className="section-kicker">Verified Traders</div>
@@ -544,7 +657,8 @@ export default function PublicSite() {
         </div>
       </section>
 
-      <section id="faq" className="section-block">
+      {/* Band 8: FAQ (Deep Graphite) */}
+      <section id="faq" className="section-block band-graphite">
         <div className="section-header">
           <div>
             <div className="section-kicker">Support</div>
@@ -573,7 +687,7 @@ export default function PublicSite() {
         </div>
       </section>
 
-      <footer id="support-legal" className="site-legal-footer">
+      <footer id="support-legal" className="site-legal-footer band-black">
         <div className="site-footer-inner">
           <div className="site-footer-top">
             <div>
@@ -624,6 +738,7 @@ export default function PublicSite() {
             <div className="site-footer-links">
               <a href="#about" className="site-footer-link">About</a>
               <a href="#markets" className="site-footer-link">Markets</a>
+              <a href="#analytics" className="site-footer-link">Signals</a>
               <a href="#plans" className="site-footer-link">Plans</a>
               <Link to="/auth" className="site-footer-link">Log In</Link>
               <Link to="/auth?mode=signup" className="site-footer-link">Open Account</Link>

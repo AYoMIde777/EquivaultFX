@@ -62,3 +62,53 @@ body {
   position: relative;
   z-index: 2;
 }
+.band-black {
+  background: #09090b;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.band-charcoal {
+  background: #121216;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.band-crimson-tint {
+  background: linear-gradient(180deg, #170d10 0%, #0d0b0e 100%);
+  border-top: 1px solid rgba(153, 27, 27, 0.28);
+  border-bottom: 1px solid rgba(153, 27, 27, 0.2);
+}
+
+.band-graphite {
+  background: #0c0d11;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.widgets-two-col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.terminal-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.terminal-stat-box {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+@media (max-width: 960px) {
+  .widgets-two-col,
+  .terminal-strip {
+    grid-template-columns: 1fr;
+  }
+}
