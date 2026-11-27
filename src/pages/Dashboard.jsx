@@ -833,19 +833,45 @@ export default function Dashboard({ session }) {
 
     setDeletingUserId(targetProfile.id);
 
-    const { data, error } = await supabase.functions.invoke('delete-user', {
-      body: { targetUserId: targetProfile.id },
-    });
+    try {
+      const {
+        data: { session: freshSession },
+        error: sessionErr,
+      } = await supabase.auth.getSession();
 
-    setDeletingUserId(null);
+      if (sessionErr || !freshSession?.access_token) {
+        showNotice(
+          `Session error: ${sessionErr?.message || 'No active access token found. Please sign in again.'}`
+        );
+        return;
+      }
 
-    if (error || data?.error) {
-      showNotice(data?.error || error?.message || 'Failed to delete user account.');
-      return;
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { targetUserId: targetProfile.id },
+        headers: {
+          Authorization: `Bearer ${freshSession.access_token}`,
+        },
+      });
+
+      if (error) {
+        const statusPart = error.context?.status ? ` (HTTP ${error.context.status})` : '';
+        showNotice(`Delete failed${statusPart}: ${error.message}`);
+        return;
+      }
+
+      if (data?.error) {
+        showNotice(`Delete rejected: ${data.error}`);
+        return;
+      }
+
+      showNotice(`Deleted account for ${targetProfile.email || targetProfile.id}.`);
+      await loadAdminData();
+      await loadUserData();
+    } catch (err) {
+      showNotice(`Unexpected delete error: ${err?.message || String(err)}`);
+    } finally {
+      setDeletingUserId(null);
     }
-
-    showNotice(`Deleted account for ${targetProfile.email || targetProfile.id}.`);
-    await loadAdminData();
   };
 
   const handleAdminKycAction = async (targetUserId, decision) => {
