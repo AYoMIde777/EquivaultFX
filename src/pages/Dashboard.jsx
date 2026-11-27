@@ -111,6 +111,7 @@ export default function Dashboard({ session }) {
 
   const [allProfiles, setAllProfiles] = useState([]);
   const [balanceEdits, setBalanceEdits] = useState({});
+  const [deletingUserId, setDeletingUserId] = useState(null);
   const [allTransactions, setAllTransactions] = useState([]);
   const [allTrades, setAllTrades] = useState([]);
   const [pnlEdits, setPnlEdits] = useState({});
@@ -816,6 +817,35 @@ export default function Dashboard({ session }) {
     showNotice(`Updated ${emailLabel || 'user'} balance to $${nextVal.toFixed(2)}.`);
     await loadAdminData();
     await loadUserData();
+  };
+
+  const handleAdminDeleteUser = async (targetProfile) => {
+    if (!targetProfile?.id) return;
+    if (targetProfile.id === userId) {
+      showNotice('You cannot delete your own signed-in admin account.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Permanently delete account for ${targetProfile.email || targetProfile.id}? This removes their login and profile.`
+    );
+    if (!confirmed) return;
+
+    setDeletingUserId(targetProfile.id);
+
+    const { data, error } = await supabase.functions.invoke('delete-user', {
+      body: { targetUserId: targetProfile.id },
+    });
+
+    setDeletingUserId(null);
+
+    if (error || data?.error) {
+      showNotice(data?.error || error?.message || 'Failed to delete user account.');
+      return;
+    }
+
+    showNotice(`Deleted account for ${targetProfile.email || targetProfile.id}.`);
+    await loadAdminData();
   };
 
   const handleAdminKycAction = async (targetUserId, decision) => {
@@ -2735,18 +2765,28 @@ export default function Dashboard({ session }) {
                             )}
                           </td>
                           <td>
-                            <div style={{ display: 'flex', gap: '8px' }}>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                               <button
+                                type="button"
                                 className="btn btn-white btn-sm"
                                 onClick={() => handleAdminKycAction(p.id, 'verified')}
                               >
                                 Approve
                               </button>
                               <button
+                                type="button"
                                 className="btn btn-crimson btn-sm"
                                 onClick={() => handleAdminKycAction(p.id, 'unverified')}
                               >
                                 Reject
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-outline btn-sm"
+                                disabled={deletingUserId === p.id || p.id === userId}
+                                onClick={() => handleAdminDeleteUser(p)}
+                              >
+                                {deletingUserId === p.id ? 'Deleting...' : 'Delete'}
                               </button>
                             </div>
                           </td>
