@@ -112,6 +112,10 @@ export default function Dashboard({ session }) {
   const [allProfiles, setAllProfiles] = useState([]);
   const [balanceEdits, setBalanceEdits] = useState({});
   const [allTransactions, setAllTransactions] = useState([]);
+  const [allTrades, setAllTrades] = useState([]);
+  const [pnlEdits, setPnlEdits] = useState({});
+  const [savingPnlId, setSavingPnlId] = useState(null);
+  const [endingTradeId, setEndingTradeId] = useState(null);
   const [walletEdits, setWalletEdits] = useState(() =>
     Object.fromEntries(NETWORK_OPTIONS.map((n) => [n.id, n.defaultWallet]))
   );
@@ -158,6 +162,19 @@ export default function Dashboard({ session }) {
   const showNotice = (msg) => {
     setNotice(msg);
     setTimeout(() => setNotice(''), 4500);
+  };
+
+  const sendTransactionEmail = async (payload) => {
+    try {
+      const { error } = await supabase.functions.invoke('send-tx-email', {
+        body: payload,
+      });
+      if (error) {
+        console.error('Email notification error:', error.message);
+      }
+    } catch (err) {
+      console.error('Email invocation failed:', err);
+    }
   };
 
   const resetWithdrawFlow = () => {
@@ -263,6 +280,23 @@ export default function Dashboard({ session }) {
       .select('*, profiles(email, full_name, balance)')
       .order('created_at', { ascending: false });
     if (txList) setAllTransactions(txList);
+
+    const { data: tradesList } = await supabase
+      .from('trades')
+      .select('*, profiles(email, full_name, username, balance)')
+      .order('created_at', { ascending: false });
+    if (tradesList) {
+      setAllTrades(tradesList);
+      setPnlEdits((prev) => {
+        const next = { ...prev };
+        for (const tr of tradesList) {
+          if (next[tr.id] === undefined) {
+            next[tr.id] = String(Number(tr.pnl || 0));
+          }
+        }
+        return next;
+      });
+    }
   };
 
   useEffect(() => {
@@ -383,6 +417,7 @@ export default function Dashboard({ session }) {
       }.`
     );
     await loadUserData();
+    if (isAdmin) await loadAdminData();
     selectTab('my-trades');
   };
 
@@ -403,6 +438,106 @@ export default function Dashboard({ session }) {
 
     showNotice(`Position closed. $${settlement.toFixed(2)} settled to your wallet.`);
     await loadUserData();
+    if (isAdmin) await loadAdminData();
+  };
+
+  const handleAdminPnlSave = async (trade) => {
+    if (!trade) return;
+    const rawVal = pnlEdits[trade.id] ?? String(Number(trade.pnl || 0));
+    const nextPnl = Number(rawVal);
+
+    if (!Number.isFinite(nextPnl)) {
+      showNotice('Enter a valid PnL number (positive for profit, negative for loss).');
+      return;
+    }
+
+    const roundedPnl = Number(nextPnl.toFixed(2));
+    setSavingPnlId(trade.id);
+
+    const { error } = await supabase
+      .from('trades')
+      .update({ pnl: roundedPnl })
+      .eq('id', trade.id);
+
+    setSavingPnlId(null);
+
+    if (error) {
+      showNotice(error.message);
+      return;
+    }
+
+    setPnlEdits((prev) => ({ ...prev, [trade.id]: String(roundedPnl) }));
+    showNotice(
+      `Updated ${trade.pair} trade PnL to ${roundedPnl >= 0 ? '+' : ''}$${roundedPnl.toFixed(2)}.`
+    );
+    await loadAdminData();
+    await loadUserData();
+  };
+
+  const handleAdminEndTrade = async (trade) => {
+    if (!trade || trade.status !== 'OPEN') return;
+    setEndingTradeId(trade.id);
+
+    const rawEditedPnl = pnlEdits[trade.id];
+    const parsedEditedPnl =
+      rawEditedPnl !== undefined && rawEditedPnl !== ''
+        ? Number(rawEditedPnl)
+        : Number(trade.pnl || 0);
+
+    if (!Number.isFinite(parsedEditedPnl)) {
+      setEndingTradeId(null);
+      showNotice('Enter a valid PnL number before ending the trade.');
+      return;
+    }
+
+    const finalPnl = Number(parsedEditedPnl.toFixed(2));
+
+    const { data: targetProf, error: profErr } = await supabase
+      .from('profiles')
+      .select('balance, email')
+      .eq('id', trade.user_id)
+      .single();
+
+    if (profErr) {
+      setEndingTradeId(null);
+      showNotice(profErr.message);
+      return;
+    }
+
+    const currentTargetBal = Number(targetProf?.balance ?? trade.profiles?.balance ?? 0);
+    const settlement = Number(trade.amount || 0) + finalPnl;
+    const updatedBal = Number((currentTargetBal + settlement).toFixed(2));
+
+    const { error: balErr } = await supabase
+      .from('profiles')
+      .update({ balance: updatedBal })
+      .eq('id', trade.user_id);
+
+    if (balErr) {
+      setEndingTradeId(null);
+      showNotice(balErr.message);
+      return;
+    }
+
+    const { error: closeErr } = await supabase
+      .from('trades')
+      .update({ status: 'CLOSED', pnl: finalPnl })
+      .eq('id', trade.id);
+
+    setEndingTradeId(null);
+
+    if (closeErr) {
+      showNotice(closeErr.message);
+      return;
+    }
+
+    showNotice(
+      `Ended ${trade.pair} trade for ${targetProf?.email || trade.profiles?.email || 'user'} with PnL ${
+        finalPnl >= 0 ? '+' : ''
+      }$${finalPnl.toFixed(2)}. Settled $${settlement.toFixed(2)}.`
+    );
+    await loadAdminData();
+    await loadUserData();
   };
 
   const handleCreateDepositRequest = (e) => {
@@ -417,6 +552,7 @@ export default function Dashboard({ session }) {
   const handleConfirmDepositSent = async () => {
     const { data: authData } = await supabase.auth.getUser();
     const activeUserId = authData?.user?.id || userId;
+    const txAddress = depositTxHash.trim() || activeDepositAddress;
 
     const { error } = await supabase.from('transactions').insert({
       user_id: activeUserId,
@@ -424,7 +560,7 @@ export default function Dashboard({ session }) {
       amount: parsedDepositAmt,
       gas_fee: depositCharges,
       network: depositNetwork.id,
-      wallet_address: depositTxHash.trim() || activeDepositAddress,
+      wallet_address: txAddress,
       status: 'Pending',
     });
 
@@ -433,13 +569,23 @@ export default function Dashboard({ session }) {
       return;
     }
 
+    await sendTransactionEmail({
+      eventType: 'submitted',
+      txKind: 'deposit',
+      targetUserId: activeUserId,
+      amount: parsedDepositAmt,
+      feeAmount: depositCharges,
+      feeLabel: 'Charges (5%)',
+      network: depositNetwork.id,
+      walletAddress: txAddress,
+    });
+
     setDepositTxHash('');
     setDepositStep('complete');
     await loadUserData();
     if (isAdmin) await loadAdminData();
   };
 
-  // Step 1 -> Step 2 validation
   const handleWithdrawContinue = (e) => {
     e.preventDefault();
     setWithdrawError('');
@@ -469,7 +615,6 @@ export default function Dashboard({ session }) {
     setWithdrawStep('gas_summary');
   };
 
-  // Step 3 -> Final Submission (holds withdrawal amount from balance; 10% gas paid separately)
   const handleFinalSubmitWithdraw = async () => {
     setWithdrawError('');
     const amt = Number(withdrawAmt);
@@ -514,6 +659,17 @@ export default function Dashboard({ session }) {
       setWithdrawError(txErr.message);
       return;
     }
+
+    await sendTransactionEmail({
+      eventType: 'submitted',
+      txKind: 'withdrawal',
+      targetUserId: userId,
+      amount: amt,
+      feeAmount: gas,
+      feeLabel: 'Gas Fee (10%)',
+      network: withdrawNetwork.id,
+      walletAddress: walletSummary,
+    });
 
     setWithdrawStep('submitted');
     showNotice(
@@ -705,6 +861,17 @@ export default function Dashboard({ session }) {
         .eq('id', tx.user_id);
     }
 
+    await sendTransactionEmail({
+      eventType: decision,
+      txKind: txAmt >= 0 ? 'deposit' : 'withdrawal',
+      targetUserId: tx.user_id,
+      amount: Math.abs(txAmt),
+      feeAmount: Number(tx.gas_fee || 0),
+      feeLabel: txAmt >= 0 ? 'Charges (5%)' : 'Gas Fee (10%)',
+      network: tx.network || '',
+      walletAddress: tx.wallet_address || '',
+    });
+
     showNotice(`Transaction marked ${decision}.`);
     await loadAdminData();
     await loadUserData();
@@ -716,6 +883,7 @@ export default function Dashboard({ session }) {
   const recentDeposits = transactions.filter((t) => Number(t.amount) > 0);
   const recentWithdrawals = transactions.filter((t) => Number(t.amount) < 0);
   const pendingDepositsCount = recentDeposits.filter((t) => t.status === 'Pending').length;
+  const openAdminTradesCount = allTrades.filter((t) => t.status === 'OPEN').length;
 
   return (
     <div className="dash-shell">
@@ -2373,6 +2541,119 @@ export default function Dashboard({ session }) {
                     {savingSettings ? 'Saving Wallets...' : 'Save All Network Wallets'}
                   </button>
                 </form>
+              </div>
+
+              <div className="panel-card">
+                <div className="panel-header">
+                  <h3>Admin Desk: User Trades ({openAdminTradesCount} Open)</h3>
+                  <button className="btn btn-outline btn-sm" onClick={loadAdminData}>
+                    Refresh
+                  </button>
+                </div>
+
+                <div className="data-table-wrap">
+                  <table className="data-table tabular">
+                    <thead>
+                      <tr>
+                        <th>Client</th>
+                        <th>Instrument</th>
+                        <th>Side</th>
+                        <th>Margin</th>
+                        <th>Entry</th>
+                        <th>PnL (USD)</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allTrades.length === 0 ? (
+                        <tr>
+                          <td colSpan="8" style={{ color: 'var(--text-muted)' }}>
+                            No user trades found.
+                          </td>
+                        </tr>
+                      ) : (
+                        allTrades.map((tr) => (
+                          <tr key={tr.id}>
+                            <td>
+                              <strong>
+                                {tr.profiles?.full_name || tr.profiles?.username || 'Trader'}
+                              </strong>
+                              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                {tr.profiles?.email || tr.user_id}
+                              </div>
+                            </td>
+                            <td><strong>{tr.pair}</strong></td>
+                            <td>
+                              <span
+                                className={`badge ${
+                                  tr.side === 'BUY' ? 'badge-long' : 'badge-short'
+                                }`}
+                              >
+                                {tr.side}
+                              </span>
+                            </td>
+                            <td>${Number(tr.amount).toLocaleString()}</td>
+                            <td>{tr.entry_price}</td>
+                            <td>
+                              {tr.status === 'OPEN' ? (
+                                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    className="form-control tabular"
+                                    style={{ width: '105px', marginTop: 0, padding: '6px 8px' }}
+                                    value={pnlEdits[tr.id] ?? String(Number(tr.pnl || 0))}
+                                    onChange={(e) =>
+                                      setPnlEdits((prev) => ({
+                                        ...prev,
+                                        [tr.id]: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline btn-sm"
+                                    disabled={savingPnlId === tr.id}
+                                    onClick={() => handleAdminPnlSave(tr)}
+                                  >
+                                    {savingPnlId === tr.id ? 'Saving...' : 'Save'}
+                                  </button>
+                                </div>
+                              ) : (
+                                <span
+                                  style={{
+                                    color:
+                                      Number(tr.pnl) >= 0
+                                        ? 'var(--positive)'
+                                        : 'var(--negative)',
+                                  }}
+                                >
+                                  {Number(tr.pnl) >= 0 ? '+' : ''}${Number(tr.pnl).toFixed(2)}
+                                </span>
+                              )}
+                            </td>
+                            <td>{tr.status}</td>
+                            <td>
+                              {tr.status === 'OPEN' ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-crimson btn-sm"
+                                  disabled={endingTradeId === tr.id}
+                                  onClick={() => handleAdminEndTrade(tr)}
+                                >
+                                  {endingTradeId === tr.id ? 'Ending...' : 'End Trade'}
+                                </button>
+                              ) : (
+                                <span style={{ color: 'var(--text-muted)' }}>Closed</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               <div className="panel-card">
